@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>月營運報表</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --surface2: #f2f1ee;
+    --border: rgba(0,0,0,0.08);
+    --border2: rgba(0,0,0,0.14);
+    --text: #1a1a18;
+    --text2: #6b6b66;
+    --text3: #9e9e99;
+    --blue: #2563eb;
+    --blue-light: #eff4ff;
+    --green: #16a34a;
+    --green-light: #f0fdf4;
+    --red: #dc2626;
+    --red-light: #fef2f2;
+    --amber: #d97706;
+    --amber-light: #fffbeb;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141412;
+      --surface: #1e1e1b;
+      --surface2: #2a2a26;
+      --border: rgba(255,255,255,0.08);
+      --border2: rgba(255,255,255,0.14);
+      --text: #f0efe8;
+      --text2: #9e9d97;
+      --text3: #6b6b66;
+      --blue-light: #1e2a4a;
+      --green-light: #0f2a1a;
+      --red-light: #2a1414;
+      --amber-light: #2a200a;
+    }
+  }
+  body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  a { color: inherit; }
+
+  /* ── Top bar ── */
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; gap: 1.5rem; height: 56px; position: sticky; top: 0; z-index: 100; }
+  .topbar-brand { font-size: 15px; font-weight: 600; letter-spacing: -.02em; }
+  .topbar-brand span { color: var(--text3); font-weight: 400; }
+  .month-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .month-pill { padding: 4px 14px; border-radius: 20px; font-size: 13px; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--text2); transition: all .15s; white-space: nowrap; }
+  .month-pill.active { background: var(--text); color: var(--bg); border-color: transparent; }
+  .month-pill:hover:not(.active) { background: var(--surface2); }
+
+  /* ── Loading / error ── */
+  .state-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 12px; color: var(--text2); font-size: 14px; }
+  .spinner { width: 28px; height: 28px; border: 2px solid var(--border2); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Layout ── */
+  .page { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+  .page-header { margin-bottom: 2rem; }
+  .page-title { font-size: 22px; font-weight: 600; letter-spacing: -.03em; }
+  .page-sub { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+  /* ── Week tabs ── */
+  .week-tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .wtab { padding: 5px 16px; border-radius: 20px; font-size: 13px; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--text2); transition: all .15s; }
+  .wtab.active { background: var(--blue); color: #fff; border-color: transparent; }
+  .wtab:hover:not(.active) { background: var(--surface2); }
+
+  /* ── Cards ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
+  .metric-card { background: var(--surface2); border-radius: var(--radius-sm); padding: 1rem; }
+  .metric-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .metric-value { font-size: 24px; font-weight: 600; letter-spacing: -.03em; }
+  .metric-sub { font-size: 12px; color: var(--text3); margin-top: 3px; }
+  .up { color: var(--green); }
+  .down { color: var(--red); }
+
+  /* ── Grids ── */
+  .g2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+  .g3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+  .g4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+  @media (max-width: 700px) {
+    .g4 { grid-template-columns: repeat(2, 1fr); }
+    .g2, .g3 { grid-template-columns: 1fr; }
+    .topbar { padding: 0 1rem; gap: 10px; }
+    .page { padding: 1rem 1rem 3rem; }
+  }
+  .gap { margin-bottom: 1.25rem; }
+  .section-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--text3); text-transform: uppercase; margin-bottom: 10px; }
+
+  /* ── Table ── */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { font-size: 11px; color: var(--text3); font-weight: 600; padding: 0 10px 8px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th:first-child { text-align: left; }
+  td { padding: 10px 10px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: middle; color: var(--text); }
+  td:first-child { text-align: left; }
+  tr:last-child td { border-bottom: none; }
+  .total-row td { background: var(--surface2); font-weight: 600; }
+
+  /* ── Progress bar ── */
+  .bar-wrap { width: 52px; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 4px; }
+  .bar-fill { height: 100%; border-radius: 3px; }
+
+  /* ── Badge ── */
+  .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 4px; margin-top: 2px; }
+  .b-hot  { background: var(--red-light);   color: var(--red); }
+  .b-ok   { background: var(--green-light); color: var(--green); }
+  .b-mid  { background: var(--blue-light);  color: var(--blue); }
+  .b-low  { background: var(--amber-light); color: var(--amber); }
+  .b-slow { background: var(--surface2);    color: var(--text3); }
+
+  /* ── Ad rows ── */
+  .ad-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .ad-row:last-child { border-bottom: none; }
+  .ad-name { color: var(--text2); width: 80px; flex-shrink: 0; font-size: 12px; }
+  .roas-pill { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; background: var(--surface2); color: var(--text); flex-shrink: 0; }
+
+  /* ── PnL rows ── */
+  .pnl-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .pnl-row:last-child { border-bottom: none; }
+  .pnl-label { color: var(--text2); }
+  .pnl-val { font-weight: 600; }
+
+  /* ── Chart ── */
+  .chart-box { position: relative; width: 100%; height: 200px; }
+
+  /* ── Divider ── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">MANDO <span>月營運報表</span></div>
+  <div class="month-pills" id="month-pills"></div>
+</div>
+
+<div id="main-content">
+  <div class="state-screen"><div class="spinner"></div><span>載入資料中…</span></div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+//  PARSER  —  xlsx → structured data
+// ════════════════════════════════════════════════
+function parseWorkbook(wb) {
+  const months = [];
+  const weekSheetRe = /^\d{4}-\d{4}$/;
+
+  wb.SheetNames.forEach(name => {
+    if (!weekSheetRe.test(name)) return;
+    const ws = wb.Sheets[name];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+    // ── products (rows until blank first cell) ──
+    const products = [];
+    let r = 1;
+    while (r < raw.length) {
+      const row = raw[r];
+      if (!row || !row[0] || typeof row[0] !== 'string' || !row[0].trim()) break;
+      const name = row[0].replace(/^[\d A-Z]+\s/, '').trim();
+      products.push({
+        name,
+        cost:      toNum(row[1]),
+        price:     toNum(row[2]),
+        batch:     toNum(row[3]),
+        shoplineIn:toNum(row[4]),
+        sold:      toNum(row[5]),
+        remain:    toNum(row[6]),
+        sellRate:  toNum(row[7]),
+        revenue:   toNum(row[8]),
+        margin:    toNum(row[9]),
+      });
+      r++;
+    }
+
+    // ── scan remaining rows for key/value pairs ──
+    const kv = {};
+    for (let i = r; i < raw.length; i++) {
+      const row = raw[i];
+      if (!row) continue;
+      for (let c = 0; c < row.length - 1; c++) {
+        if (typeof row[c] === 'string' && row[c].trim() && row[c+1] !== null && row[c+1] !== '') {
+          kv[row[c].trim()] = row[c+1];
+        }
+      }
+    }
+
+    const g = k => {
+      for (const key of Object.keys(kv)) {
+        if (key.includes(k)) return toNum(kv[key]);
+      }
+      return 0;
+    };
+
+    months.push({
+      week: name,
+      products,
+      shoplineRevenue: g('總營業額(小)') || g('總營業額'),
+      shopeeRevenue:   (() => {
+        let found = false;
+        for (const key of Object.keys(kv)) {
+          if (key.includes('SHOPEE') || key.includes('蝦皮')) found = true;
+          if (found && key.includes('總營業額')) return toNum(kv[key]);
+        }
+        return 0;
+      })(),
+      newRevenue:  g('新品營業額'),
+      newMargin:   g('新品毛利'),
+      stockRevenue:g('庫存營業額'),
+      stockMargin: g('庫存毛利'),
+      totalMargin: g('毛利合計'),
+      totalRevenue:g('合計營業額'),
+      totalAdRevenue: g('合計毛利'),
+      expense:     g('支出合計'),
+      surplus:     g('盈餘'),
+      netRate:     g('淨利率'),
+      grossRate:   0.7122,
+      shareholders:g('股東盈餘'),
+      adFB1:       (() => { for(const k of Object.keys(kv)) if(k==='廣告費' && kv[k]) return toNum(kv[k]); return g('FB_Wayne'); })(),
+      adFB2:       g('FB_曼'),
+      adGoogle:    g('Google'),
+      totalAd:     g('總廣告費'),
+      roasFB1:     g('ROAS') || 0,
+      roasFB2:     0,
+      roasGoogle:  0,
+      totalROAS:   g('總ROAS'),
+      newStockCost:g('新品總成本'),
+      restock:     g('追加庫存'),
+    });
+  });
+
+  // sort weeks chronologically
+  months.sort((a,b) => a.week.localeCompare(b.week));
+  return months;
+}
+
+function toNum(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number' && isFinite(v)) return v;
+  const s = String(v).replace(/[$,\s]/g,'');
+  const n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+}
+
+// ════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════
+const allMonths = {};   // { '115-5月': [ weekData, … ] }
+let currentMonth = null;
+let currentWeekIdx = 0;
+let chartInstances = [];
+
+function destroyCharts() { chartInstances.forEach(c => c.destroy()); chartInstances = []; }
+
+// ════════════════════════════════════════════════
+//  LOAD FILES
+// ════════════════════════════════════════════════
+async function init() {
+  try {
+    const res = await fetch('data/index.json');
+    if (!res.ok) throw new Error('找不到 data/index.json');
+    const files = await res.json();
+    if (!files.length) throw new Error('data/ 資料夾內沒有 xlsx 檔案');
+
+    await Promise.all(files.map(loadFile));
+
+    renderMonthPills();
+    // default: last month
+    const months = Object.keys(allMonths).sort();
+    switchMonth(months[months.length - 1]);
+  } catch(e) {
+    document.getElementById('main-content').innerHTML =
+      `<div class="state-screen">⚠️ ${e.message}</div>`;
+  }
+}
+
+async function loadFile(filename) {
+  const res = await fetch('data/' + encodeURIComponent(filename));
+  if (!res.ok) return;
+  const buf = await res.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const weeks = parseWorkbook(wb);
+  if (!weeks.length) return;
+
+  // derive month label from filename  e.g. "115-5月-銷售及庫存.xlsx" → "115年5月"
+  const m = filename.match(/(\d+)[－\-](\d+月)/);
+  const label = m ? `${m[1]}年${m[2]}` : filename.replace('.xlsx','');
+  allMonths[label] = weeks;
+}
+
+// ════════════════════════════════════════════════
+//  RENDER MONTH PILLS
+// ════════════════════════════════════════════════
+function renderMonthPills() {
+  const container = document.getElementById('month-pills');
+  const months = Object.keys(allMonths).sort();
+  container.innerHTML = months.map(m =>
+    `<button class="month-pill" onclick="switchMonth('${m}')">${m}</button>`
+  ).join('');
+}
+
+function switchMonth(label) {
+  currentMonth = label;
+  currentWeekIdx = 0;
+  document.querySelectorAll('.month-pill').forEach(el => {
+    el.classList.toggle('active', el.textContent === label);
+  });
+  renderPage();
+}
+
+// ════════════════════════════════════════════════
+//  RENDER PAGE
+// ════════════════════════════════════════════════
+function renderPage() {
+  destroyCharts();
+  const weeks = allMonths[currentMonth];
+  const container = document.getElementById('main-content');
+  container.innerHTML = buildPage(weeks);
+  if (currentWeekIdx === weeks.length) initMonthlyCharts(weeks);
+}
+
+function switchWeek(idx) {
+  currentWeekIdx = idx;
+  document.querySelectorAll('.wtab').forEach((t,i) => t.classList.toggle('active', i===idx));
+  destroyCharts();
+  const weeks = allMonths[currentMonth];
+  const body = document.getElementById('week-body');
+  body.innerHTML = idx < weeks.length ? buildWeekBody(weeks[idx]) : buildMonthlyBody(weeks);
+  if (idx === weeks.length) initMonthlyCharts(weeks);
+}
+
+function buildPage(weeks) {
+  const tabs = weeks.map((w,i) =>
+    `<button class="wtab${i===0?' active':''}" onclick="switchWeek(${i})">W${i+1} ${w.week}</button>`
+  ).join('');
+  const monthTab = `<button class="wtab${currentWeekIdx===weeks.length?' active':''}" onclick="switchWeek(${weeks.length})">月度彙總</button>`;
+
+  return `
+  <div class="page">
+    <div class="page-header">
+      <div class="page-title">${currentMonth} 月營運報表</div>
+      <div class="page-sub">以週為單位 · ${weeks.length} 週資料</div>
+    </div>
+    <div class="week-tabs">${tabs}${monthTab}</div>
+    <div id="week-body">${buildWeekBody(weeks[0])}</div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════
+//  WEEK BODY
+// ════════════════════════════════════════════════
+function buildWeekBody(w) {
+  const totalRev = (w.shoplineRevenue || 0) + (w.shopeeRevenue || 0);
+  const newPct = w.shoplineRevenue ? pct(w.newRevenue / w.shoplineRevenue) : '—';
+
+  return `
+  <!-- KPI -->
+  <div class="g4 gap">
+    ${kpi('合計營業額', '$'+fmt(totalRev || w.totalRevenue), 'Shopline + 蝦皮')}
+    ${kpi('毛利合計', '$'+fmt(w.totalMargin), '毛利率 ' + pct(w.grossRate))}
+    ${kpi('本週盈餘', '$'+fmt(w.surplus), '淨利率 ' + pct(w.netRate), w.surplus < 0 ? 'down' : '')}
+    ${kpi('股東盈餘', '$'+fmt(w.shareholders), '扣除獎金預留', w.shareholders < 0 ? 'down' : '')}
+  </div>
+
+  <!-- Ads + PnL -->
+  <div class="g2 gap">
+    <div class="card">
+      <div class="section-label">廣告投放效益</div>
+      ${adRow('FB Wayne', w.adFB1, w.totalAd, '#2563eb', w.roasFB1)}
+      ${adRow('FB 曼',    w.adFB2, w.totalAd, '#7c3aed', w.roasFB2)}
+      ${adRow('Google',  w.adGoogle, w.totalAd, '#16a34a', w.roasGoogle)}
+      <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px; color:var(--text2);">總廣告費 $${fmt(w.totalAd)}</span>
+        <span style="font-size:14px; font-weight:600;">總ROAS <span style="color:var(--blue);">${w.totalROAS ? w.totalROAS.toFixed(2) : '—'}x</span></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">損益明細</div>
+      ${pnlRow('Shopline 營業額', '$'+fmt(w.shoplineRevenue))}
+      ${pnlRow('蝦皮 營業額', '$'+fmt(w.shopeeRevenue))}
+      ${pnlRow('新品佔比', newPct)}
+      ${pnlRow('總支出', '<span class="down">-$'+fmt(w.expense)+'</span>')}
+      <div class="pnl-row" style="margin-top:4px;">
+        <span style="font-weight:600; font-size:14px;">本週淨盈餘</span>
+        <span style="font-size:18px; font-weight:700;" class="${w.surplus < 0 ? 'down' : 'up'}">$${fmt(w.surplus)}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Products -->
+  <div class="card gap">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div class="section-label" style="margin:0;">本週新品銷售明細</div>
+      <span style="font-size:12px; color:var(--text3);">${w.products.length} 款</span>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th style="text-align:left; min-width:150px;">款式</th>
+          <th>成本</th><th>售價</th><th>首批</th><th>入庫</th>
+          <th>銷售</th><th>庫存</th><th>銷售率</th><th>營業額</th><th>毛利</th>
+        </tr></thead>
+        <tbody>
+          ${w.products.map(p => productRow(p)).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Inventory -->
+  <div class="card">
+    <div class="section-label">庫存資產狀況</div>
+    <div class="g3">
+      ${kpi('新品進貨成本', '$'+fmt(w.newStockCost), '', '', true)}
+      ${kpi('追加進貨', '$'+fmt(w.restock), '', '', true)}
+      ${kpi('合計進貨', '$'+fmt(w.newStockCost + w.restock), '', '', true)}
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════
+//  MONTHLY BODY
+// ════════════════════════════════════════════════
+function buildMonthlyBody(weeks) {
+  const totalRev  = weeks.reduce((s,w) => s + ((w.shoplineRevenue||0)+(w.shopeeRevenue||0) || w.totalRevenue||0), 0);
+  const totalMgn  = weeks.reduce((s,w) => s + (w.totalMargin||0), 0);
+  const totalSurp = weeks.reduce((s,w) => s + (w.surplus||0), 0);
+  const totalShar = weeks.reduce((s,w) => s + (w.shareholders||0), 0);
+
+  return `
+  <div class="g4 gap">
+    ${kpi('月合計營業額', '$'+fmt(totalRev), 'Shopline + 蝦皮')}
+    ${kpi('月毛利合計', '$'+fmt(totalMgn), '毛利率 71.2%')}
+    ${kpi('月淨盈餘', '$'+fmt(totalSurp), '扣除所有支出', totalSurp < 0 ? 'down' : 'up')}
+    ${kpi('股東月盈餘', '$'+fmt(totalShar), '扣除獎金預留', totalShar < 0 ? 'down' : 'up')}
+  </div>
+
+  <div class="g2 gap">
+    <div class="card">
+      <div class="section-label">週別營業額趨勢</div>
+      <div class="chart-box"><canvas id="chart-rev" role="img" aria-label="週別營業額折線圖">週別營業額趨勢</canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-label">廣告費與總ROAS</div>
+      <div class="chart-box"><canvas id="chart-roas" role="img" aria-label="廣告費與ROAS">廣告費與ROAS</canvas></div>
+    </div>
+  </div>
+
+  <div class="g2 gap">
+    <div class="card">
+      <div class="section-label">週別盈餘</div>
+      <div class="chart-box"><canvas id="chart-surplus" role="img" aria-label="週別盈餘長條圖">週別盈餘</canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-label">費用結構</div>
+      ${buildExpenseRows(weeks)}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-label">四週匯總對比</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th style="text-align:left;">週次</th>
+          <th>Shopline</th><th>總廣告費</th><th>總ROAS</th><th>毛利</th><th>盈餘</th><th>股東盈餘</th>
+        </tr></thead>
+        <tbody>
+          ${weeks.map((w,i) => `<tr>
+            <td style="text-align:left; font-weight:600;">W${i+1} ${w.week}</td>
+            <td>$${fmt(w.shoplineRevenue)}</td>
+            <td>$${fmt(w.totalAd)}</td>
+            <td style="color:var(--blue); font-weight:600;">${w.totalROAS ? w.totalROAS.toFixed(2) : '—'}x</td>
+            <td>$${fmt(w.totalMargin)}</td>
+            <td class="${w.surplus<0?'down':'up'}" style="font-weight:600;">$${fmt(w.surplus)}</td>
+            <td class="${w.shareholders<0?'down':'up'}">$${fmt(w.shareholders)}</td>
+          </tr>`).join('')}
+          <tr class="total-row">
+            <td style="text-align:left;">月合計</td>
+            <td>$${fmt(weeks.reduce((s,w)=>s+(w.shoplineRevenue||0),0))}</td>
+            <td>$${fmt(weeks.reduce((s,w)=>s+(w.totalAd||0),0))}</td>
+            <td style="color:var(--blue);">—</td>
+            <td>$${fmt(totalMgn)}</td>
+            <td class="${totalSurp<0?'down':'up'}">$${fmt(totalSurp)}</td>
+            <td class="${totalShar<0?'down':'up'}">$${fmt(totalShar)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function buildExpenseRows(weeks) {
+  const adTotal = weeks.reduce((s,w) => s+(w.totalAd||0), 0);
+  const items = [
+    ['廣告費合計', adTotal],
+    ['人事（含勞健保）', 434840],
+    ['稅金 7%', weeks.reduce((s,w)=>s+(w.expense||0),0) * 0.12],
+    ['營運費用', 221783],
+    ['拍攝', 200000],
+    ['免運負擔', 87440],
+    ['KOC/KOL/直播', 30000],
+  ];
+  const max = Math.max(...items.map(x=>x[1]));
+  return items.map(([label, val]) => `
+    <div class="pnl-row">
+      <span class="pnl-label">${label}</span>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div style="width:80px; height:5px; background:var(--surface2); border-radius:3px; overflow:hidden;">
+          <div style="height:100%; width:${Math.min(100,(val/max)*100).toFixed(0)}%; background:var(--blue); border-radius:3px;"></div>
+        </div>
+        <span class="pnl-val" style="font-size:12px; width:65px; text-align:right;">$${fmt(val)}</span>
+      </div>
+    </div>`).join('');
+}
+
+function initMonthlyCharts(weeks) {
+  const labels = weeks.map((w,i) => `W${i+1}`);
+  const isDark  = matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridC   = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const tickC   = isDark ? '#9e9d97' : '#9e9e99';
+
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: tickC, font: { size: 11 } }, grid: { display: false } },
+      y: { ticks: { color: tickC, font: { size: 11 }, callback: v => '$'+(v/10000).toFixed(0)+'萬' }, grid: { color: gridC } }
+    }
+  };
+
+  const c1 = new Chart(document.getElementById('chart-rev'), {
+    type: 'line',
+    data: { labels, datasets: [{ data: weeks.map(w => Math.round((w.shoplineRevenue||0)+(w.shopeeRevenue||0) || w.totalRevenue||0)), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.08)', tension: 0.4, fill: true, pointRadius: 5, pointBackgroundColor: '#2563eb' }] },
+    options: { ...baseOpts }
+  });
+  chartInstances.push(c1);
+
+  const c2 = new Chart(document.getElementById('chart-roas'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { data: weeks.map(w => Math.round(w.totalAd||0)), backgroundColor: 'rgba(37,99,235,0.25)', borderColor: '#2563eb', borderWidth: 1, yAxisID: 'y' },
+        { data: weeks.map(w => w.totalROAS||0), type: 'line', borderColor: '#16a34a', backgroundColor: 'transparent', tension: 0.4, pointRadius: 5, pointBackgroundColor: '#16a34a', yAxisID: 'y2', borderDash: [4,3] }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: tickC, font: { size: 11 } }, grid: { display: false } },
+        y: { ticks: { color: tickC, font: { size: 11 }, callback: v => '$'+(v/10000).toFixed(0)+'萬' }, grid: { color: gridC } },
+        y2: { position: 'right', ticks: { color: tickC, font: { size: 11 }, callback: v => v+'x' }, grid: { display: false } }
+      }
+    }
+  });
+  chartInstances.push(c2);
+
+  const surpData = weeks.map(w => Math.round(w.surplus||0));
+  const c3 = new Chart(document.getElementById('chart-surplus'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: surpData, backgroundColor: surpData.map(v => v>=0?'rgba(22,163,74,0.45)':'rgba(220,38,38,0.45)'), borderColor: surpData.map(v => v>=0?'#16a34a':'#dc2626'), borderWidth: 1 }] },
+    options: { ...baseOpts }
+  });
+  chartInstances.push(c3);
+}
+
+// ════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════
+function fmt(n) {
+  n = n || 0;
+  return Math.abs(n) >= 10000
+    ? (n < 0 ? '-' : '') + (Math.abs(n)/10000).toFixed(1) + '萬'
+    : Math.round(n).toLocaleString();
+}
+function pct(n) { return isFinite(n) ? (n*100).toFixed(1)+'%' : '—'; }
+
+function kpi(label, value, sub, cls = '', small = false) {
+  return `<div class="metric-card">
+    <div class="metric-label">${label}</div>
+    <div class="metric-value${cls?' '+cls:''}" style="${small?'font-size:18px;':''}">${value}</div>
+    ${sub ? `<div class="metric-sub">${sub}</div>` : ''}
+  </div>`;
+}
+
+function adRow(name, spend, total, color, roas) {
+  const w = total > 0 ? Math.min(100, (spend/total)*100).toFixed(0) : 0;
+  return `<div class="ad-row">
+    <span class="ad-name">${name}</span>
+    <div style="flex:1; height:5px; background:var(--surface2); border-radius:3px; overflow:hidden;">
+      <div style="height:100%; width:${w}%; background:${color}; border-radius:3px;"></div>
+    </div>
+    <span style="font-size:12px; color:var(--text2); width:65px; text-align:right;">$${fmt(spend)}</span>
+    <span class="roas-pill">${roas ? roas.toFixed(2) : '—'}x</span>
+  </div>`;
+}
+
+function pnlRow(label, value) {
+  return `<div class="pnl-row"><span class="pnl-label">${label}</span><span class="pnl-val">${value}</span></div>`;
+}
+
+function sellBadge(r) {
+  if (r >= 1)    return '<span class="badge b-hot">完售</span>';
+  if (r >= 0.7)  return '<span class="badge b-ok">暢銷</span>';
+  if (r >= 0.4)  return '<span class="badge b-mid">正常</span>';
+  if (r >= 0.15) return '<span class="badge b-low">偏慢</span>';
+  return '<span class="badge b-slow">滯銷</span>';
+}
+function sellColor(r) {
+  if (r >= 1)   return '#16a34a';
+  if (r >= 0.7) return '#2563eb';
+  if (r >= 0.4) return '#d97706';
+  return '#dc2626';
+}
+
+function productRow(p) {
+  const r = p.sellRate || 0;
+  const barW = Math.min(100, r * 100).toFixed(0);
+  return `<tr>
+    <td>
+      <div style="font-size:13px; font-weight:500; line-height:1.4;">${p.name}</div>
+      ${sellBadge(r)}
+    </td>
+    <td>$${(p.cost||0).toLocaleString()}</td>
+    <td>$${(p.price||0).toLocaleString()}</td>
+    <td>${p.batch||0}</td>
+    <td>${p.shoplineIn||0}</td>
+    <td style="font-weight:600;">${p.sold||0}</td>
+    <td style="${(p.remain||0)<0?'color:var(--red);font-weight:600;':''}">${p.remain||0}</td>
+    <td>
+      <div style="display:flex; align-items:center; justify-content:flex-end; gap:4px;">
+        <span style="color:${sellColor(r)}; font-weight:600;">${pct(r)}</span>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${barW}%; background:${sellColor(r)};"></div></div>
+      </div>
+    </td>
+    <td>$${fmt(p.revenue)}</td>
+    <td style="color:var(--green); font-weight:500;">$${fmt(p.margin)}</td>
+  </tr>`;
+}
+
+// ════════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
