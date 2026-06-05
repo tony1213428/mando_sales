@@ -353,6 +353,7 @@ function renderPage() {
 
 function switchWeek(i) {
   curWeek = i;
+  sortKey = null; sortAsc = true;
   document.querySelectorAll('.wtab').forEach((t,j) => t.classList.toggle('active', i === j));
   killCharts();
   const weeks = allMonths[curMonth];
@@ -481,18 +482,22 @@ function buildWeekBody(w) {
   </div>
 
   <!-- ③ 新品銷售明細 -->
-  <div class="card gap">
+  <div class="card gap" id="prod-card">
     <div class="sec-hd">
       <div class="sl" style="margin:0">當週新品銷售明細</div>
       <span style="font-size:12px;color:var(--text3)">${w.products.length} 款</span>
     </div>
-    <div class="twrap"><table>
+    <div class="twrap"><table id="prod-table">
       <thead><tr>
         <th style="text-align:left;min-width:160px">款式</th>
         <th>成本</th><th>售價</th><th>首批</th><th>入庫</th>
-        <th>銷售</th><th>庫存</th><th>銷售率</th><th>營業額</th><th>毛利</th>
+        <th class="sortable" onclick="sortProds('sold')" style="cursor:pointer;user-select:none">銷售 <span id="sort-sold">↕</span></th>
+        <th>庫存</th>
+        <th class="sortable" onclick="sortProds('sellRate')" style="cursor:pointer;user-select:none">銷售率 <span id="sort-sellRate">↕</span></th>
+        <th class="sortable" onclick="sortProds('revenue')" style="cursor:pointer;user-select:none">營業額 <span id="sort-revenue">↕</span></th>
+        <th class="sortable" onclick="sortProds('margin')" style="cursor:pointer;user-select:none">毛利 <span id="sort-margin">↕</span></th>
       </tr></thead>
-      <tbody>${w.products.map(p => prodRow(p)).join('')}</tbody>
+      <tbody id="prod-tbody">${w.products.map(p => prodRow(p)).join('')}</tbody>
     </table></div>
   </div>
 
@@ -726,6 +731,45 @@ function prodRow(p) {
     <td>$${fmt(p.revenue)}</td>
     <td style="color:var(--green);font-weight:600">$${fmt(p.margin)}</td>
   </tr>`;
+}
+
+// ══════════════════════════════════════════
+//  SORT
+// ══════════════════════════════════════════
+let sortKey = null, sortAsc = true;
+
+function sortProds(key) {
+  if (sortKey === key) {
+    sortAsc = !sortAsc;
+  } else {
+    sortKey = key;
+    sortAsc = false; // default: high to low
+  }
+
+  // update arrow indicators
+  ['sold','sellRate','revenue','margin'].forEach(k => {
+    const el = document.getElementById('sort-'+k);
+    if (!el) return;
+    if (k === key) {
+      el.textContent = sortAsc ? '↑' : '↓';
+      el.style.color = 'var(--blue)';
+    } else {
+      el.textContent = '↕';
+      el.style.color = 'var(--text3)';
+    }
+  });
+
+  const weeks = allMonths[curMonth];
+  const w = weeks[curWeek];
+  if (!w) return;
+
+  const sorted = [...w.products].sort((a, b) => {
+    const va = a[key] || 0, vb = b[key] || 0;
+    return sortAsc ? va - vb : vb - va;
+  });
+
+  const tbody = document.getElementById('prod-tbody');
+  if (tbody) tbody.innerHTML = sorted.map(p => prodRow(p)).join('');
 }
 
 init();
