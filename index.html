@@ -3,612 +3,639 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>月營運報表</title>
+<title>MANDO 月營運報表</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #f8f7f4;
-    --surface: #ffffff;
-    --surface2: #f2f1ee;
-    --border: rgba(0,0,0,0.08);
-    --border2: rgba(0,0,0,0.14);
-    --text: #1a1a18;
-    --text2: #6b6b66;
-    --text3: #9e9e99;
-    --blue: #2563eb;
-    --blue-light: #eff4ff;
-    --green: #16a34a;
-    --green-light: #f0fdf4;
-    --red: #dc2626;
-    --red-light: #fef2f2;
-    --amber: #d97706;
-    --amber-light: #fffbeb;
-    --radius: 10px;
-    --radius-sm: 6px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #141412;
-      --surface: #1e1e1b;
-      --surface2: #2a2a26;
-      --border: rgba(255,255,255,0.08);
-      --border2: rgba(255,255,255,0.14);
-      --text: #f0efe8;
-      --text2: #9e9d97;
-      --text3: #6b6b66;
-      --blue-light: #1e2a4a;
-      --green-light: #0f2a1a;
-      --red-light: #2a1414;
-      --amber-light: #2a200a;
-    }
-  }
-  body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-  a { color: inherit; }
-
-  /* ── Top bar ── */
-  .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; gap: 1.5rem; height: 56px; position: sticky; top: 0; z-index: 100; }
-  .topbar-brand { font-size: 15px; font-weight: 600; letter-spacing: -.02em; }
-  .topbar-brand span { color: var(--text3); font-weight: 400; }
-  .month-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
-  .month-pill { padding: 4px 14px; border-radius: 20px; font-size: 13px; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--text2); transition: all .15s; white-space: nowrap; }
-  .month-pill.active { background: var(--text); color: var(--bg); border-color: transparent; }
-  .month-pill:hover:not(.active) { background: var(--surface2); }
-
-  /* ── Loading / error ── */
-  .state-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 12px; color: var(--text2); font-size: 14px; }
-  .spinner { width: 28px; height: 28px; border: 2px solid var(--border2); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── Layout ── */
-  .page { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
-  .page-header { margin-bottom: 2rem; }
-  .page-title { font-size: 22px; font-weight: 600; letter-spacing: -.03em; }
-  .page-sub { font-size: 13px; color: var(--text2); margin-top: 4px; }
-
-  /* ── Week tabs ── */
-  .week-tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; flex-wrap: wrap; }
-  .wtab { padding: 5px 16px; border-radius: 20px; font-size: 13px; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--text2); transition: all .15s; }
-  .wtab.active { background: var(--blue); color: #fff; border-color: transparent; }
-  .wtab:hover:not(.active) { background: var(--surface2); }
-
-  /* ── Cards ── */
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
-  .metric-card { background: var(--surface2); border-radius: var(--radius-sm); padding: 1rem; }
-  .metric-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
-  .metric-value { font-size: 24px; font-weight: 600; letter-spacing: -.03em; }
-  .metric-sub { font-size: 12px; color: var(--text3); margin-top: 3px; }
-  .up { color: var(--green); }
-  .down { color: var(--red); }
-
-  /* ── Grids ── */
-  .g2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
-  .g3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
-  .g4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
-  @media (max-width: 700px) {
-    .g4 { grid-template-columns: repeat(2, 1fr); }
-    .g2, .g3 { grid-template-columns: 1fr; }
-    .topbar { padding: 0 1rem; gap: 10px; }
-    .page { padding: 1rem 1rem 3rem; }
-  }
-  .gap { margin-bottom: 1.25rem; }
-  .section-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--text3); text-transform: uppercase; margin-bottom: 10px; }
-
-  /* ── Table ── */
-  .tbl-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { font-size: 11px; color: var(--text3); font-weight: 600; padding: 0 10px 8px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  th:first-child { text-align: left; }
-  td { padding: 10px 10px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: middle; color: var(--text); }
-  td:first-child { text-align: left; }
-  tr:last-child td { border-bottom: none; }
-  .total-row td { background: var(--surface2); font-weight: 600; }
-
-  /* ── Progress bar ── */
-  .bar-wrap { width: 52px; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 4px; }
-  .bar-fill { height: 100%; border-radius: 3px; }
-
-  /* ── Badge ── */
-  .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 4px; margin-top: 2px; }
-  .b-hot  { background: var(--red-light);   color: var(--red); }
-  .b-ok   { background: var(--green-light); color: var(--green); }
-  .b-mid  { background: var(--blue-light);  color: var(--blue); }
-  .b-low  { background: var(--amber-light); color: var(--amber); }
-  .b-slow { background: var(--surface2);    color: var(--text3); }
-
-  /* ── Ad rows ── */
-  .ad-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
-  .ad-row:last-child { border-bottom: none; }
-  .ad-name { color: var(--text2); width: 80px; flex-shrink: 0; font-size: 12px; }
-  .roas-pill { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; background: var(--surface2); color: var(--text); flex-shrink: 0; }
-
-  /* ── PnL rows ── */
-  .pnl-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
-  .pnl-row:last-child { border-bottom: none; }
-  .pnl-label { color: var(--text2); }
-  .pnl-val { font-weight: 600; }
-
-  /* ── Chart ── */
-  .chart-box { position: relative; width: 100%; height: 200px; }
-
-  /* ── Divider ── */
-  hr { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f6f3;--surface:#fff;--surface2:#f0efe9;--border:rgba(0,0,0,0.07);--border2:rgba(0,0,0,0.13);
+  --text:#1a1a18;--text2:#6b6b66;--text3:#a0a09a;
+  --blue:#2563eb;--blue-bg:#eff4ff;--green:#16a34a;--green-bg:#f0fdf4;
+  --red:#dc2626;--red-bg:#fef2f2;--amber:#d97706;--amber-bg:#fffbeb;
+  --r:10px;--rs:6px;
+}
+body{font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;gap:1rem;height:56px;position:sticky;top:0;z-index:100;flex-wrap:wrap}
+.brand{font-size:15px;font-weight:700;letter-spacing:-.02em;flex-shrink:0}
+.brand span{color:var(--text3);font-weight:400}
+.month-pills{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.mpill{padding:4px 14px;border-radius:20px;font-size:13px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text2);transition:all .15s;white-space:nowrap}
+.mpill.active{background:var(--text);color:var(--bg);border-color:transparent}
+.mpill:hover:not(.active){background:var(--surface2)}
+.state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:12px;color:var(--text2);font-size:14px}
+.spinner{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.page{max-width:1140px;margin:0 auto;padding:2rem 1.5rem 4rem}
+.ph{margin-bottom:2rem}
+.ph-title{font-size:22px;font-weight:700;letter-spacing:-.03em}
+.ph-sub{font-size:13px;color:var(--text2);margin-top:4px}
+.wtabs{display:flex;gap:6px;margin-bottom:1.5rem;flex-wrap:wrap}
+.wtab{padding:5px 16px;border-radius:20px;font-size:13px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text2);transition:all .15s}
+.wtab.active{background:var(--blue);color:#fff;border-color:transparent}
+.wtab:hover:not(.active){background:var(--surface2)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem}
+.mc{background:var(--surface2);border-radius:var(--rs);padding:1rem}
+.ml{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.mv{font-size:24px;font-weight:700;letter-spacing:-.03em}
+.ms{font-size:12px;color:var(--text3);margin-top:3px}
+.up{color:var(--green)}.down{color:var(--red)}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media(max-width:700px){.g4{grid-template-columns:repeat(2,1fr)}.g2,.g3{grid-template-columns:1fr}.topbar{padding:0 1rem}.page{padding:1rem 1rem 3rem}}
+.gap{margin-bottom:1.25rem}
+.sl{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;margin-bottom:10px}
+.sec-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.twrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:11px;color:var(--text3);font-weight:700;padding:0 8px 8px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+th:first-child{text-align:left}
+td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}
+td:first-child{text-align:left}
+tr:last-child td{border-bottom:none}
+.trow-total td{background:var(--surface2);font-weight:700}
+.bw{width:52px;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-left:4px}
+.bf{height:100%;border-radius:3px}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:4px;margin-top:2px}
+.b-hot{background:var(--red-bg);color:var(--red)}
+.b-ok{background:var(--green-bg);color:var(--green)}
+.b-mid{background:var(--blue-bg);color:var(--blue)}
+.b-low{background:var(--amber-bg);color:var(--amber)}
+.b-slow{background:var(--surface2);color:var(--text3)}
+.adrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
+.adrow:last-child{border-bottom:none}
+.adname{color:var(--text2);width:75px;flex-shrink:0;font-size:12px}
+.rpill{font-size:12px;font-weight:700;padding:2px 9px;border-radius:10px;background:var(--surface2);color:var(--text);flex-shrink:0;min-width:52px;text-align:center}
+.prow{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
+.prow:last-child{border-bottom:none}
+.plabel{color:var(--text2)}
+.pval{font-weight:600}
+.dv{height:1px;background:var(--border);margin:.75rem 0}
+.cbox{position:relative;width:100%;height:200px}
+.ebar{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px}
+.ebar:last-child{border-bottom:none}
+.elabel{color:var(--text2);flex:1}
+.ebar-track{width:90px;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;flex-shrink:0}
+.ebar-fill{height:100%;background:var(--blue);border-radius:3px}
+.eval{font-weight:600;width:70px;text-align:right;flex-shrink:0;font-size:12px}
+.ad-detail{font-size:11px;color:var(--text3);margin-top:2px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.info-cell{background:var(--surface2);border-radius:var(--rs);padding:8px 10px}
+.info-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+.info-val{font-size:14px;font-weight:700;margin-top:2px}
 </style>
 </head>
 <body>
-
 <div class="topbar">
-  <div class="topbar-brand">MANDO <span>月營運報表</span></div>
-  <div class="month-pills" id="month-pills"></div>
+  <div class="brand">MANDO <span>月營運報表</span></div>
+  <div class="month-pills" id="mpills"></div>
 </div>
-
-<div id="main-content">
-  <div class="state-screen"><div class="spinner"></div><span>載入資料中…</span></div>
-</div>
+<div id="main"><div class="state"><div class="spinner"></div><span>載入資料中…</span></div></div>
 
 <script>
-// ════════════════════════════════════════════════
-//  PARSER  —  xlsx → structured data
-// ════════════════════════════════════════════════
-function parseWorkbook(wb) {
-  const months = [];
-  const weekSheetRe = /^\d{4}-\d{4}$/;
+// ══════════════════════════════════════════
+//  PARSER — keyword-based, handles variable row counts
+// ══════════════════════════════════════════
+function parseSheet(ws) {
+  const R = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+  const n = v => {
+    if (v === null || v === undefined || v === '') return 0;
+    if (typeof v === 'number' && isFinite(v)) return v;
+    return parseFloat(String(v).replace(/[NT$,\s]/g,'')) || 0;
+  };
+  const s = v => v === null || v === undefined ? '' : String(v).trim();
 
-  wb.SheetNames.forEach(name => {
-    if (!weekSheetRe.test(name)) return;
-    const ws = wb.Sheets[name];
-    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-
-    // ── products (rows until blank first cell) ──
-    const products = [];
-    let r = 1;
-    while (r < raw.length) {
-      const row = raw[r];
-      if (!row || !row[0] || typeof row[0] !== 'string' || !row[0].trim()) break;
-      const name = row[0].replace(/^[\d A-Z]+\s/, '').trim();
-      products.push({
-        name,
-        cost:      toNum(row[1]),
-        price:     toNum(row[2]),
-        batch:     toNum(row[3]),
-        shoplineIn:toNum(row[4]),
-        sold:      toNum(row[5]),
-        remain:    toNum(row[6]),
-        sellRate:  toNum(row[7]),
-        revenue:   toNum(row[8]),
-        margin:    toNum(row[9]),
-      });
-      r++;
+  // helper: find row index where col0 matches keyword
+  const find = (kw, startRow=0) => {
+    for (let i = startRow; i < R.length; i++) {
+      if (R[i] && s(R[i][0]).includes(kw)) return i;
     }
-
-    // ── scan remaining rows for key/value pairs ──
-    const kv = {};
-    for (let i = r; i < raw.length; i++) {
-      const row = raw[i];
-      if (!row) continue;
-      for (let c = 0; c < row.length - 1; c++) {
-        if (typeof row[c] === 'string' && row[c].trim() && row[c+1] !== null && row[c+1] !== '') {
-          kv[row[c].trim()] = row[c+1];
-        }
-      }
+    return -1;
+  };
+  // find in col1
+  const find1 = (kw, startRow=0) => {
+    for (let i = startRow; i < R.length; i++) {
+      if (R[i] && s(R[i][1]).includes(kw)) return i;
     }
+    return -1;
+  };
+  // value on next row col1
+  const nextVal = (rowIdx) => rowIdx >= 0 && R[rowIdx+1] ? n(R[rowIdx+1][1]) : 0;
 
-    const g = k => {
-      for (const key of Object.keys(kv)) {
-        if (key.includes(k)) return toNum(kv[key]);
-      }
-      return 0;
-    };
-
-    months.push({
-      week: name,
-      products,
-      shoplineRevenue: g('總營業額(小)') || g('總營業額'),
-      shopeeRevenue:   (() => {
-        let found = false;
-        for (const key of Object.keys(kv)) {
-          if (key.includes('SHOPEE') || key.includes('蝦皮')) found = true;
-          if (found && key.includes('總營業額')) return toNum(kv[key]);
-        }
-        return 0;
-      })(),
-      newRevenue:  g('新品營業額'),
-      newMargin:   g('新品毛利'),
-      stockRevenue:g('庫存營業額'),
-      stockMargin: g('庫存毛利'),
-      totalMargin: g('毛利合計'),
-      totalRevenue:g('合計營業額'),
-      totalAdRevenue: g('合計毛利'),
-      expense:     g('支出合計'),
-      surplus:     g('盈餘'),
-      netRate:     g('淨利率'),
-      grossRate:   0.7122,
-      shareholders:g('股東盈餘'),
-      adFB1:       (() => { for(const k of Object.keys(kv)) if(k==='廣告費' && kv[k]) return toNum(kv[k]); return g('FB_Wayne'); })(),
-      adFB2:       g('FB_曼'),
-      adGoogle:    g('Google'),
-      totalAd:     g('總廣告費'),
-      roasFB1:     g('ROAS') || 0,
-      roasFB2:     0,
-      roasGoogle:  0,
-      totalROAS:   g('總ROAS'),
-      newStockCost:g('新品總成本'),
-      restock:     g('追加庫存'),
+  // ── Products: rows 1..N until blank col0
+  const products = [];
+  for (let i = 1; i < R.length; i++) {
+    const row = R[i];
+    if (!row || !row[0] || typeof row[0] !== 'string') break;
+    const raw = String(row[0]);
+    const name = raw.includes('\n') ? raw.split('\n').slice(1).join(' ') : raw.replace(/^[A-Z0-9]+\s*/,'');
+    products.push({
+      name, cost:n(row[1]), price:n(row[2]), batch:n(row[3]),
+      totalCost:n(row[4]), shoplineIn:n(row[5]), sold:n(row[6]),
+      remain:n(row[7]), sellRate:n(row[8]), revenue:n(row[9]), margin:n(row[10]),
     });
-  });
+  }
 
-  // sort weeks chronologically
-  months.sort((a,b) => a.week.localeCompare(b.week));
-  return months;
+  // ── Ad section — find header row (has FB_Wayne in col1)
+  const adHeaderRow = find1('FB_Wayne');
+  const adFB1row = find('廣告費', adHeaderRow);
+  const adFB1 = adFB1row >= 0 ? n(R[adFB1row][1]) : 0;
+  const adFB2 = adFB1row >= 0 ? n(R[adFB1row][2]) : 0;
+  const adGoogle = adFB1row >= 0 ? n(R[adFB1row][3]) : 0;
+
+  const buyRow = find('購買數', adHeaderRow);
+  const buyFB1 = buyRow >= 0 ? n(R[buyRow][1]) : 0;
+  const buyFB2 = buyRow >= 0 ? n(R[buyRow][2]) : 0;
+  const buyGoogle = buyRow >= 0 ? n(R[buyRow][3]) : 0;
+
+  const roasRow = find('ROAS', adHeaderRow);
+  const roasFB1 = roasRow >= 0 ? n(R[roasRow][1]) : 0;
+  const roasFB2 = roasRow >= 0 ? n(R[roasRow][2]) : 0;
+  const roasGoogle = roasRow >= 0 ? n(R[roasRow][3]) : 0;
+
+  const revRow = find('廣告費*ROAS', adHeaderRow) >= 0 ? find('廣告費*ROAS', adHeaderRow) : find('產生營業額', adHeaderRow);
+  const revFB1 = revRow >= 0 ? n(R[revRow][1]) : 0;
+  const revFB2 = revRow >= 0 ? n(R[revRow][2]) : 0;
+  const revGoogle = revRow >= 0 ? n(R[revRow][3]) : 0;
+
+  const totalAdRow = find('總廣告費', adHeaderRow);
+  const totalAd = totalAdRow >= 0 ? n(R[totalAdRow][1]) : 0;
+
+  const shoplineGrossRow = find('B_成交總額', adHeaderRow) >= 0 ? find('B_成交總額', adHeaderRow) : find('成交總額(Shopline)', adHeaderRow);
+  const shoplineGross = shoplineGrossRow >= 0 ? n(R[shoplineGrossRow][1]) : 0;
+
+  const shoplineRevRow = find('C_總營業額', adHeaderRow) >= 0 ? find('C_總營業額', adHeaderRow) : find('總營業額(Shopline)', adHeaderRow);
+  const shoplineRevAd = shoplineRevRow >= 0 ? n(R[shoplineRevRow][1]) : 0;
+
+  const lostPctRow = find('流失成交總額%', adHeaderRow);
+  const lostAmt = lostPctRow > 0 ? n(R[lostPctRow-1]?.[1]) : 0;
+  const lostPct = lostPctRow >= 0 ? n(R[lostPctRow][1]) : 0;
+
+  const natRevRow = find('自然流量產生_營業額(C-A)', adHeaderRow);
+  const natRevAmt = natRevRow >= 0 ? n(R[natRevRow][1]) : 0;
+  const natRevPct = natRevRow >= 0 ? n(R[natRevRow+1]?.[1]) : 0;
+
+  const natGrossRow = find('自然流量產生_成交額(B-A)', adHeaderRow);
+  const natGrossAmt = natGrossRow >= 0 ? n(R[natGrossRow][1]) : 0;
+  const natGrossPct = natGrossRow >= 0 ? n(R[natGrossRow+1]?.[1]) : 0;
+
+  const totalROASrow = find('總營業額ROAS', adHeaderRow);
+  const totalROAS = totalROASrow >= 0 ? n(R[totalROASrow][1]) : 0;
+  const totalGrossROASrow = find('總成交額ROAS', adHeaderRow);
+  const totalGrossROAS = totalGrossROASrow >= 0 ? n(R[totalGrossROASrow][1]) : 0;
+
+  // ── Sales summary — find 銷售狀況 block
+  const salesStart = find('銷售狀況');
+
+  const shoplineRevRow2 = find1('總營業額(小)', salesStart);
+  const shoplineRevenue = shoplineRevRow2 >= 0 ? n(R[shoplineRevRow2+1]?.[1]) : shoplineRevAd;
+
+  const newRevRow = find1('新品營業額', salesStart);
+  const newRevenue = newRevRow >= 0 ? n(R[newRevRow+1]?.[1]) : 0;
+  const newSellPct = newRevRow >= 0 ? n(R[newRevRow+1]?.[3]) : 0;
+
+  const newMgnRow = find1('新品毛利', salesStart);
+  const newMargin = newMgnRow >= 0 ? n(R[newMgnRow+1]?.[1]) : 0;
+
+  const stockRevRow = find1('庫存營業額', salesStart);
+  const stockRevenue = stockRevRow >= 0 ? n(R[stockRevRow+1]?.[1]) : 0;
+
+  const stockMgnRow = find1('庫存毛利', salesStart);
+  const stockMargin = stockMgnRow >= 0 ? n(R[stockMgnRow+1]?.[1]) : 0;
+
+  const totalMgnRow = find1('毛利合計', salesStart);
+  const totalMargin = totalMgnRow >= 0 ? n(R[totalMgnRow+1]?.[1]) : 0;
+
+  // shopee — find SHOPEE block
+  const shopeeStart = find1('SHOPEE', salesStart);
+  const shopeeRevRow = find1('總營業額(小)', shopeeStart);
+  const shopeeRevenue = shopeeRevRow >= 0 ? n(R[shopeeRevRow+1]?.[1]) : 0;
+  const shopeeMgnRow = find1('毛利', shopeeStart);
+  const shopeeMargin = shopeeMgnRow >= 0 ? n(R[shopeeMgnRow+1]?.[1]) : 0;
+
+  const totalRevRow = find('收入合計', salesStart);
+  const totalRevenue = totalRevRow >= 0 ? n(R[totalRevRow+1]?.[1]) : 0;
+  const totalMargin2Row = find1('合計毛利', salesStart);
+  const totalMargin2 = totalMargin2Row >= 0 ? n(R[totalMargin2Row+1]?.[1]) : 0;
+
+  // ── Expenses
+  const expStart = find('支', salesStart);
+  const expAd = find1('FB 廣告費', expStart) >= 0 ? n(R[find1('FB 廣告費', expStart)+1]?.[1]) : 0;
+  const expShopeeAd = find1('蝦皮廣告費', expStart) >= 0 ? n(R[find1('蝦皮廣告費', expStart)+1]?.[1]) : 0;
+  const expStaff = find1('人事', expStart) >= 0 ? n(R[find1('人事', expStart)+1]?.[1]) : 0;
+  const expOps = find1('營運', expStart) >= 0 ? n(R[find1('營運', expStart)+1]?.[1]) : 0;
+  const expPhoto = find1('拍攝', expStart) >= 0 ? n(R[find1('拍攝', expStart)+1]?.[1]) : 0;
+  const expKOC = find1('KOC', expStart) >= 0 ? n(R[find1('KOC', expStart)+1]?.[1]) : 0;
+  const expTax = find1('稅金', expStart) >= 0 ? n(R[find1('稅金', expStart)+1]?.[1]) : 0;
+  const expShipping = find1('免運', expStart) >= 0 ? n(R[find1('免運', expStart)+1]?.[1]) : 0;
+  const totalExpRow = find('支出合計', expStart);
+  const totalExpense = totalExpRow >= 0 ? n(R[totalExpRow][1]) : 0;
+
+  // ── PnL
+  const surplusRow = find('盈餘', totalExpRow > 0 ? totalExpRow : expStart);
+  const surplus = surplusRow >= 0 ? n(R[surplusRow][1]) : 0;
+  const grossRateRow = find('毛利率', surplusRow);
+  const grossRate = grossRateRow >= 0 ? n(R[grossRateRow][1]) : 0;
+  const netRateRow = find('淨利率', surplusRow);
+  const netRate = netRateRow >= 0 ? n(R[netRateRow][1]) : 0;
+  const bonusRow = find('將金預留', surplusRow);
+  const bonusReserve = bonusRow >= 0 ? n(R[bonusRow][1]) : 0;
+  const sharRow = find('股東盈餘', surplusRow);
+  const shareholders = sharRow >= 0 ? n(R[sharRow][1]) : 0;
+
+  // ── Inventory
+  const invStart = find('庫存狀況', surplusRow);
+  const newStockRow = find('新品總成本', invStart);
+  const newStockCost = newStockRow >= 0 ? n(R[newStockRow][1]) : 0;
+  const restockRow = find('追加庫存', invStart);
+  const restock = restockRow >= 0 ? n(R[restockRow][1]) : 0;
+  const stockTotalRow = find('合計', invStart);
+  const stockTotal = stockTotalRow >= 0 ? n(R[stockTotalRow][1]) : 0;
+  const consumedRow = find('消耗庫存', invStart);
+  const consumed = consumedRow >= 0 ? n(R[consumedRow][1]) : 0;
+  const invDeltaRow = find('庫存資產情況', invStart);
+  const inventoryDir = invDeltaRow >= 0 ? s(R[invDeltaRow][1]) : '';
+  const inventoryDelta = invDeltaRow >= 0 ? n(R[invDeltaRow][2]) : 0;
+
+  return {
+    products,
+    adFB1, adFB2, adGoogle,
+    buyFB1, buyFB2, buyGoogle,
+    roasFB1, roasFB2, roasGoogle,
+    revFB1, revFB2, revGoogle,
+    totalAd, shoplineGross, totalROAS, totalGrossROAS,
+    lostAmt, lostPct,
+    natRevAmt, natRevPct, natGrossAmt, natGrossPct,
+    newRevenue, newSellPct, newMargin,
+    stockRevenue, stockMargin, totalMargin,
+    shoplineRevenue, shopeeRevenue, shopeeMargin,
+    totalRevenue, totalMargin2,
+    expAd, expShopeeAd, expStaff, expOps, expPhoto, expKOC, expTax, expShipping, totalExpense,
+    surplus, grossRate, netRate, bonusReserve, shareholders,
+    newStockCost, restock, stockTotal, consumed, inventoryDir, inventoryDelta,
+  };
 }
 
-function toNum(v) {
-  if (v === null || v === undefined || v === '') return 0;
-  if (typeof v === 'number' && isFinite(v)) return v;
-  const s = String(v).replace(/[$,\s]/g,'');
-  const n = parseFloat(s);
-  return isFinite(n) ? n : 0;
+function parseWorkbook(wb) {
+  const weekRe = /^\d{4}-\d{4}$/;
+  return wb.SheetNames
+    .filter(n => weekRe.test(n))
+    .map(name => ({week: name, ...parseSheet(wb.Sheets[name])}));
 }
 
-// ════════════════════════════════════════════════
+// ══════════════════════════════════════════
 //  STATE
-// ════════════════════════════════════════════════
-const allMonths = {};   // { '115-5月': [ weekData, … ] }
-let currentMonth = null;
-let currentWeekIdx = 0;
-let chartInstances = [];
+// ══════════════════════════════════════════
+const allMonths = {};
+let curMonth = null, curWeek = 0, charts = [];
+function killCharts() { charts.forEach(c => c.destroy()); charts = []; }
 
-function destroyCharts() { chartInstances.forEach(c => c.destroy()); chartInstances = []; }
-
-// ════════════════════════════════════════════════
-//  LOAD FILES
-// ════════════════════════════════════════════════
 async function init() {
   try {
     const res = await fetch('data/index.json');
     if (!res.ok) throw new Error('找不到 data/index.json');
     const files = await res.json();
-    if (!files.length) throw new Error('data/ 資料夾內沒有 xlsx 檔案');
-
+    if (!files.length) throw new Error('尚無資料');
     await Promise.all(files.map(loadFile));
-
-    renderMonthPills();
-    // default: last month
-    const months = Object.keys(allMonths).sort();
-    switchMonth(months[months.length - 1]);
+    renderPills();
+    const ms = Object.keys(allMonths).sort();
+    switchMonth(ms[ms.length - 1]);
   } catch(e) {
-    document.getElementById('main-content').innerHTML =
-      `<div class="state-screen">⚠️ ${e.message}</div>`;
+    document.getElementById('main').innerHTML = `<div class="state">⚠️ ${e.message}</div>`;
   }
 }
 
-async function loadFile(filename) {
-  const res = await fetch('data/' + encodeURIComponent(filename));
+async function loadFile(fn) {
+  const res = await fetch('data/' + encodeURIComponent(fn));
   if (!res.ok) return;
   const buf = await res.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array' });
+  const wb = XLSX.read(buf, {type: 'array'});
   const weeks = parseWorkbook(wb);
   if (!weeks.length) return;
-
-  // derive month label from filename  e.g. "115-5月-銷售及庫存.xlsx" → "115年5月"
-  const m = filename.match(/(\d+)[－\-](\d+月)/);
-  const label = m ? `${m[1]}年${m[2]}` : filename.replace('.xlsx','');
+  const m = fn.match(/(\d+)[－\-](\d+月)/);
+  const label = m ? `${m[1]}年${m[2]}` : fn.replace('.xlsx','');
   allMonths[label] = weeks;
 }
 
-// ════════════════════════════════════════════════
-//  RENDER MONTH PILLS
-// ════════════════════════════════════════════════
-function renderMonthPills() {
-  const container = document.getElementById('month-pills');
-  const months = Object.keys(allMonths).sort();
-  container.innerHTML = months.map(m =>
-    `<button class="month-pill" onclick="switchMonth('${m}')">${m}</button>`
-  ).join('');
+function renderPills() {
+  document.getElementById('mpills').innerHTML =
+    Object.keys(allMonths).sort().map(m =>
+      `<button class="mpill" onclick="switchMonth('${m}')">${m}</button>`
+    ).join('');
 }
 
 function switchMonth(label) {
-  currentMonth = label;
-  currentWeekIdx = 0;
-  document.querySelectorAll('.month-pill').forEach(el => {
-    el.classList.toggle('active', el.textContent === label);
-  });
+  curMonth = label; curWeek = 0;
+  document.querySelectorAll('.mpill').forEach(el => el.classList.toggle('active', el.textContent === label));
   renderPage();
 }
 
-// ════════════════════════════════════════════════
-//  RENDER PAGE
-// ════════════════════════════════════════════════
 function renderPage() {
-  destroyCharts();
-  const weeks = allMonths[currentMonth];
-  const container = document.getElementById('main-content');
-  container.innerHTML = buildPage(weeks);
-  if (currentWeekIdx === weeks.length) initMonthlyCharts(weeks);
+  killCharts();
+  const weeks = allMonths[curMonth];
+  document.getElementById('main').innerHTML = buildPage(weeks);
 }
 
-function switchWeek(idx) {
-  currentWeekIdx = idx;
-  document.querySelectorAll('.wtab').forEach((t,i) => t.classList.toggle('active', i===idx));
-  destroyCharts();
-  const weeks = allMonths[currentMonth];
-  const body = document.getElementById('week-body');
-  body.innerHTML = idx < weeks.length ? buildWeekBody(weeks[idx]) : buildMonthlyBody(weeks);
-  if (idx === weeks.length) initMonthlyCharts(weeks);
+function switchWeek(i) {
+  curWeek = i;
+  document.querySelectorAll('.wtab').forEach((t,j) => t.classList.toggle('active', i === j));
+  killCharts();
+  const weeks = allMonths[curMonth];
+  document.getElementById('wbody').innerHTML =
+    i < weeks.length ? buildWeekBody(weeks[i]) : buildMonthlyBody(weeks);
+  if (i === weeks.length) initCharts(weeks);
 }
 
 function buildPage(weeks) {
   const tabs = weeks.map((w,i) =>
     `<button class="wtab${i===0?' active':''}" onclick="switchWeek(${i})">W${i+1} ${w.week}</button>`
   ).join('');
-  const monthTab = `<button class="wtab${currentWeekIdx===weeks.length?' active':''}" onclick="switchWeek(${weeks.length})">月度彙總</button>`;
-
-  return `
-  <div class="page">
-    <div class="page-header">
-      <div class="page-title">${currentMonth} 月營運報表</div>
-      <div class="page-sub">以週為單位 · ${weeks.length} 週資料</div>
+  return `<div class="page">
+    <div class="ph">
+      <div class="ph-title">${curMonth} 月營運報表</div>
+      <div class="ph-sub">以週為單位 · ${weeks.length} 週資料</div>
     </div>
-    <div class="week-tabs">${tabs}${monthTab}</div>
-    <div id="week-body">${buildWeekBody(weeks[0])}</div>
+    <div class="wtabs">${tabs}<button class="wtab" onclick="switchWeek(${weeks.length})">月度彙總</button></div>
+    <div id="wbody">${buildWeekBody(weeks[0])}</div>
   </div>`;
 }
 
-// ════════════════════════════════════════════════
+// ══════════════════════════════════════════
 //  WEEK BODY
-// ════════════════════════════════════════════════
+// ══════════════════════════════════════════
 function buildWeekBody(w) {
-  const totalRev = (w.shoplineRevenue || 0) + (w.shopeeRevenue || 0);
-  const newPct = w.shoplineRevenue ? pct(w.newRevenue / w.shoplineRevenue) : '—';
+  const totalRev = w.totalRevenue || (w.shoplineRevenue + w.shopeeRevenue);
+  const totalMgn = w.totalMargin2 || w.totalMargin;
 
   return `
-  <!-- KPI -->
+  <!-- ① KPI -->
   <div class="g4 gap">
-    ${kpi('合計營業額', '$'+fmt(totalRev || w.totalRevenue), 'Shopline + 蝦皮')}
-    ${kpi('毛利合計', '$'+fmt(w.totalMargin), '毛利率 ' + pct(w.grossRate))}
-    ${kpi('本週盈餘', '$'+fmt(w.surplus), '淨利率 ' + pct(w.netRate), w.surplus < 0 ? 'down' : '')}
-    ${kpi('股東盈餘', '$'+fmt(w.shareholders), '扣除獎金預留', w.shareholders < 0 ? 'down' : '')}
+    ${kpi('合計營業額', '$'+fmt(totalRev), 'Shopline + 蝦皮')}
+    ${kpi('毛利合計', '$'+fmt(totalMgn), '毛利率 '+pct(w.grossRate))}
+    ${kpi('本週盈餘', '$'+fmt(w.surplus), '淨利率 '+pct(w.netRate), w.surplus<0?'down':'')}
+    ${kpi('股東盈餘', '$'+fmt(w.shareholders), '扣除獎金預留', w.shareholders<0?'down':'')}
   </div>
 
-  <!-- Ads + PnL -->
+  <!-- ② 廣告效益 + 損益 -->
   <div class="g2 gap">
     <div class="card">
-      <div class="section-label">廣告投放效益</div>
-      ${adRow('FB Wayne', w.adFB1, w.totalAd, '#2563eb', w.roasFB1)}
-      ${adRow('FB 曼',    w.adFB2, w.totalAd, '#7c3aed', w.roasFB2)}
-      ${adRow('Google',  w.adGoogle, w.totalAd, '#16a34a', w.roasGoogle)}
-      <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:12px; color:var(--text2);">總廣告費 $${fmt(w.totalAd)}</span>
-        <span style="font-size:14px; font-weight:600;">總ROAS <span style="color:var(--blue);">${w.totalROAS ? w.totalROAS.toFixed(2) : '—'}x</span></span>
+      <div class="sl">廣告投放效益</div>
+      ${adRow('FB Wayne', w.adFB1, w.totalAd, '#2563eb', w.roasFB1, w.buyFB1, w.revFB1)}
+      ${adRow('FB 曼',    w.adFB2, w.totalAd, '#7c3aed', w.roasFB2, w.buyFB2, w.revFB2)}
+      ${adRow('Google',  w.adGoogle, w.totalAd, '#16a34a', w.roasGoogle, w.buyGoogle, w.revGoogle)}
+      <div class="dv"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div><div class="ml">總廣告費</div><div style="font-size:18px;font-weight:700">$${fmt(w.totalAd)}</div></div>
+        <div style="text-align:center">
+          <div class="ml">總營業額ROAS</div>
+          <div style="font-size:22px;font-weight:800;color:var(--blue)">${w.totalROAS.toFixed(2)}x</div>
+        </div>
+        <div style="text-align:right">
+          <div class="ml">總成交額ROAS</div>
+          <div style="font-size:18px;font-weight:700;color:var(--blue)">${w.totalGrossROAS.toFixed(2)}x</div>
+        </div>
+      </div>
+      <div class="info-grid">
+        ${infoCell('成交總額(Shopline)', '$'+fmt(w.shoplineGross))}
+        ${infoCell('流失成交額', '$'+fmt(w.lostAmt)+' <span style="color:var(--red);font-size:11px">'+pct(w.lostPct)+'</span>')}
+        ${infoCell('自然流量_成交額', '$'+fmt(w.natGrossAmt)+' <span style="font-size:11px;color:var(--text3)">'+pct(w.natGrossPct)+'</span>')}
+        ${infoCell('自然流量_營業額', '$'+fmt(w.natRevAmt)+' <span style="font-size:11px;color:'+(w.natRevPct<0?'var(--red)':'var(--text3)')+'">'+pct(w.natRevPct)+'</span>')}
       </div>
     </div>
 
     <div class="card">
-      <div class="section-label">損益明細</div>
-      ${pnlRow('Shopline 營業額', '$'+fmt(w.shoplineRevenue))}
-      ${pnlRow('蝦皮 營業額', '$'+fmt(w.shopeeRevenue))}
-      ${pnlRow('新品佔比', newPct)}
-      ${pnlRow('總支出', '<span class="down">-$'+fmt(w.expense)+'</span>')}
-      <div class="pnl-row" style="margin-top:4px;">
-        <span style="font-weight:600; font-size:14px;">本週淨盈餘</span>
-        <span style="font-size:18px; font-weight:700;" class="${w.surplus < 0 ? 'down' : 'up'}">$${fmt(w.surplus)}</span>
-      </div>
+      <div class="sl">損益明細</div>
+      ${pr('Shopline 營業額', '$'+fmt(w.shoplineRevenue))}
+      ${pr('蝦皮 營業額', '$'+fmt(w.shopeeRevenue))}
+      ${pr('新品營業額', '$'+fmt(w.newRevenue)+' <span style="color:var(--text3);font-size:11px">('+pct(w.newSellPct)+')</span>')}
+      ${pr('新品毛利', '$'+fmt(w.newMargin))}
+      ${pr('庫存營業額', '$'+fmt(w.stockRevenue))}
+      ${pr('庫存毛利', '$'+fmt(w.stockMargin))}
+      ${pr('毛利合計', '<strong>$'+fmt(totalMgn)+'</strong>')}
+      <div class="dv"></div>
+      ${pr('FB廣告+Google+投手', '<span class="down">-$'+fmt(w.expAd)+'</span>')}
+      ${pr('蝦皮廣告費', '<span class="down">-$'+fmt(w.expShopeeAd)+'</span>')}
+      ${pr('人事(含勞健保)', '<span class="down">-$'+fmt(w.expStaff)+'</span>')}
+      ${pr('稅金7%', '<span class="down">-$'+fmt(w.expTax)+'</span>')}
+      ${pr('營運費用', '<span class="down">-$'+fmt(w.expOps)+'</span>')}
+      ${pr('拍攝', '<span class="down">-$'+fmt(w.expPhoto)+'</span>')}
+      ${pr('KOC/KOL/直播', '<span class="down">-$'+fmt(w.expKOC)+'</span>')}
+      ${pr('免運負擔', '<span class="down">-$'+fmt(w.expShipping)+'</span>')}
+      ${pr('支出合計', '<span class="down" style="font-weight:700">-$'+fmt(w.totalExpense)+'</span>')}
+      <div class="dv"></div>
+      <div class="prow"><span style="font-weight:700;font-size:14px">本週淨盈餘</span><span style="font-size:20px;font-weight:800" class="${w.surplus<0?'down':'up'}">$${fmt(w.surplus)}</span></div>
+      ${pr('獎金預留', '$'+fmt(w.bonusReserve))}
+      <div class="prow"><span style="font-weight:700">股東盈餘</span><span style="font-weight:700;color:var(--green);font-size:16px">$${fmt(w.shareholders)}</span></div>
     </div>
   </div>
 
-  <!-- Products -->
+  <!-- ③ 新品銷售明細 -->
   <div class="card gap">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <div class="section-label" style="margin:0;">本週新品銷售明細</div>
-      <span style="font-size:12px; color:var(--text3);">${w.products.length} 款</span>
+    <div class="sec-hd">
+      <div class="sl" style="margin:0">當週新品銷售明細</div>
+      <span style="font-size:12px;color:var(--text3)">${w.products.length} 款</span>
     </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr>
-          <th style="text-align:left; min-width:150px;">款式</th>
-          <th>成本</th><th>售價</th><th>首批</th><th>入庫</th>
-          <th>銷售</th><th>庫存</th><th>銷售率</th><th>營業額</th><th>毛利</th>
-        </tr></thead>
-        <tbody>
-          ${w.products.map(p => productRow(p)).join('')}
-        </tbody>
-      </table>
-    </div>
+    <div class="twrap"><table>
+      <thead><tr>
+        <th style="text-align:left;min-width:160px">款式</th>
+        <th>成本</th><th>售價</th><th>首批</th><th>入庫</th>
+        <th>銷售</th><th>庫存</th><th>銷售率</th><th>營業額</th><th>毛利</th>
+      </tr></thead>
+      <tbody>${w.products.map(p => prodRow(p)).join('')}</tbody>
+    </table></div>
   </div>
 
-  <!-- Inventory -->
+  <!-- ④ 庫存 -->
   <div class="card">
-    <div class="section-label">庫存資產狀況</div>
-    <div class="g3">
+    <div class="sl">庫存資產狀況</div>
+    <div class="g4">
       ${kpi('新品進貨成本', '$'+fmt(w.newStockCost), '', '', true)}
       ${kpi('追加進貨', '$'+fmt(w.restock), '', '', true)}
-      ${kpi('合計進貨', '$'+fmt(w.newStockCost + w.restock), '', '', true)}
+      ${kpi('合計進貨', '$'+fmt(w.stockTotal), '', '', true)}
+      ${kpi('庫存資產'+w.inventoryDir, '$'+fmt(w.inventoryDelta), '消耗 $'+fmt(w.consumed), '', true)}
     </div>
   </div>`;
 }
 
-// ════════════════════════════════════════════════
+// ══════════════════════════════════════════
 //  MONTHLY BODY
-// ════════════════════════════════════════════════
+// ══════════════════════════════════════════
 function buildMonthlyBody(weeks) {
-  const totalRev  = weeks.reduce((s,w) => s + ((w.shoplineRevenue||0)+(w.shopeeRevenue||0) || w.totalRevenue||0), 0);
-  const totalMgn  = weeks.reduce((s,w) => s + (w.totalMargin||0), 0);
-  const totalSurp = weeks.reduce((s,w) => s + (w.surplus||0), 0);
-  const totalShar = weeks.reduce((s,w) => s + (w.shareholders||0), 0);
+  const sum = k => weeks.reduce((s,w) => s+(w[k]||0), 0);
+  const tRev = sum('totalRevenue'), tMgn = sum('totalMargin2')||sum('totalMargin');
+  const tSurp = sum('surplus'), tShar = sum('shareholders');
 
   return `
   <div class="g4 gap">
-    ${kpi('月合計營業額', '$'+fmt(totalRev), 'Shopline + 蝦皮')}
-    ${kpi('月毛利合計', '$'+fmt(totalMgn), '毛利率 71.2%')}
-    ${kpi('月淨盈餘', '$'+fmt(totalSurp), '扣除所有支出', totalSurp < 0 ? 'down' : 'up')}
-    ${kpi('股東月盈餘', '$'+fmt(totalShar), '扣除獎金預留', totalShar < 0 ? 'down' : 'up')}
+    ${kpi('月合計營業額', '$'+fmt(tRev), 'Shopline + 蝦皮')}
+    ${kpi('月毛利合計', '$'+fmt(tMgn), '')}
+    ${kpi('月淨盈餘', '$'+fmt(tSurp), '', tSurp<0?'down':'up')}
+    ${kpi('股東月盈餘', '$'+fmt(tShar), '', tShar<0?'down':'up')}
   </div>
 
   <div class="g2 gap">
-    <div class="card">
-      <div class="section-label">週別營業額趨勢</div>
-      <div class="chart-box"><canvas id="chart-rev" role="img" aria-label="週別營業額折線圖">週別營業額趨勢</canvas></div>
-    </div>
-    <div class="card">
-      <div class="section-label">廣告費與總ROAS</div>
-      <div class="chart-box"><canvas id="chart-roas" role="img" aria-label="廣告費與ROAS">廣告費與ROAS</canvas></div>
-    </div>
+    <div class="card"><div class="sl">週別營業額趨勢</div><div class="cbox"><canvas id="c-rev"></canvas></div></div>
+    <div class="card"><div class="sl">廣告費與總ROAS</div><div class="cbox"><canvas id="c-roas"></canvas></div></div>
   </div>
 
   <div class="g2 gap">
-    <div class="card">
-      <div class="section-label">週別盈餘</div>
-      <div class="chart-box"><canvas id="chart-surplus" role="img" aria-label="週別盈餘長條圖">週別盈餘</canvas></div>
-    </div>
-    <div class="card">
-      <div class="section-label">費用結構</div>
-      ${buildExpenseRows(weeks)}
-    </div>
+    <div class="card"><div class="sl">週別盈餘</div><div class="cbox"><canvas id="c-surp"></canvas></div></div>
+    <div class="card"><div class="sl">費用結構（月合計）</div>${buildExpRows(weeks)}</div>
+  </div>
+
+  <div class="card gap">
+    <div class="sl">各週廣告效益匯總</div>
+    <div class="twrap"><table>
+      <thead><tr>
+        <th style="text-align:left">週次</th>
+        <th>FB Wayne</th><th>ROAS</th><th>FB 曼</th><th>ROAS</th>
+        <th>Google</th><th>ROAS</th><th>總廣告費</th>
+        <th>總營業額ROAS</th><th>總成交額ROAS</th>
+      </tr></thead>
+      <tbody>
+        ${weeks.map((w,i) => `<tr>
+          <td style="text-align:left;font-weight:700">W${i+1} ${w.week}</td>
+          <td>$${fmt(w.adFB1)}</td><td style="color:var(--blue);font-weight:700">${w.roasFB1.toFixed(2)}x</td>
+          <td>$${fmt(w.adFB2)}</td><td style="color:var(--blue);font-weight:700">${w.roasFB2.toFixed(2)}x</td>
+          <td>$${fmt(w.adGoogle)}</td><td style="color:var(--blue);font-weight:700">${w.roasGoogle.toFixed(2)}x</td>
+          <td style="font-weight:700">$${fmt(w.totalAd)}</td>
+          <td style="color:var(--blue);font-weight:800">${w.totalROAS.toFixed(2)}x</td>
+          <td style="color:var(--blue)">${w.totalGrossROAS.toFixed(2)}x</td>
+        </tr>`).join('')}
+        <tr class="trow-total">
+          <td style="text-align:left">月合計</td>
+          <td>$${fmt(sum('adFB1'))}</td><td>—</td>
+          <td>$${fmt(sum('adFB2'))}</td><td>—</td>
+          <td>$${fmt(sum('adGoogle'))}</td><td>—</td>
+          <td>$${fmt(sum('totalAd'))}</td><td>—</td><td>—</td>
+        </tr>
+      </tbody>
+    </table></div>
   </div>
 
   <div class="card">
-    <div class="section-label">四週匯總對比</div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr>
-          <th style="text-align:left;">週次</th>
-          <th>Shopline</th><th>總廣告費</th><th>總ROAS</th><th>毛利</th><th>盈餘</th><th>股東盈餘</th>
-        </tr></thead>
-        <tbody>
-          ${weeks.map((w,i) => `<tr>
-            <td style="text-align:left; font-weight:600;">W${i+1} ${w.week}</td>
-            <td>$${fmt(w.shoplineRevenue)}</td>
-            <td>$${fmt(w.totalAd)}</td>
-            <td style="color:var(--blue); font-weight:600;">${w.totalROAS ? w.totalROAS.toFixed(2) : '—'}x</td>
-            <td>$${fmt(w.totalMargin)}</td>
-            <td class="${w.surplus<0?'down':'up'}" style="font-weight:600;">$${fmt(w.surplus)}</td>
-            <td class="${w.shareholders<0?'down':'up'}">$${fmt(w.shareholders)}</td>
-          </tr>`).join('')}
-          <tr class="total-row">
-            <td style="text-align:left;">月合計</td>
-            <td>$${fmt(weeks.reduce((s,w)=>s+(w.shoplineRevenue||0),0))}</td>
-            <td>$${fmt(weeks.reduce((s,w)=>s+(w.totalAd||0),0))}</td>
-            <td style="color:var(--blue);">—</td>
-            <td>$${fmt(totalMgn)}</td>
-            <td class="${totalSurp<0?'down':'up'}">$${fmt(totalSurp)}</td>
-            <td class="${totalShar<0?'down':'up'}">$${fmt(totalShar)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <div class="sl">四週損益匯總</div>
+    <div class="twrap"><table>
+      <thead><tr>
+        <th style="text-align:left">週次</th>
+        <th>Shopline</th><th>蝦皮</th><th>合計營業額</th>
+        <th>毛利合計</th><th>支出合計</th><th>盈餘</th><th>股東盈餘</th>
+      </tr></thead>
+      <tbody>
+        ${weeks.map((w,i) => `<tr>
+          <td style="text-align:left;font-weight:700">W${i+1} ${w.week}</td>
+          <td>$${fmt(w.shoplineRevenue)}</td>
+          <td>$${fmt(w.shopeeRevenue)}</td>
+          <td>$${fmt(w.totalRevenue)}</td>
+          <td>$${fmt(w.totalMargin2||w.totalMargin)}</td>
+          <td><span class="down">-$${fmt(w.totalExpense)}</span></td>
+          <td class="${w.surplus<0?'down':'up'}" style="font-weight:700">$${fmt(w.surplus)}</td>
+          <td class="${w.shareholders<0?'down':'up'}">$${fmt(w.shareholders)}</td>
+        </tr>`).join('')}
+        <tr class="trow-total">
+          <td style="text-align:left">月合計</td>
+          <td>$${fmt(sum('shoplineRevenue'))}</td>
+          <td>$${fmt(sum('shopeeRevenue'))}</td>
+          <td>$${fmt(tRev)}</td>
+          <td>$${fmt(tMgn)}</td>
+          <td><span class="down">-$${fmt(sum('totalExpense'))}</span></td>
+          <td class="${tSurp<0?'down':'up'}" style="font-weight:700">$${fmt(tSurp)}</td>
+          <td class="${tShar<0?'down':'up'}" style="font-weight:700">$${fmt(tShar)}</td>
+        </tr>
+      </tbody>
+    </table></div>
   </div>`;
 }
 
-function buildExpenseRows(weeks) {
-  const adTotal = weeks.reduce((s,w) => s+(w.totalAd||0), 0);
+function buildExpRows(weeks) {
+  const sum = k => weeks.reduce((s,w) => s+(w[k]||0), 0);
   const items = [
-    ['廣告費合計', adTotal],
-    ['人事（含勞健保）', 434840],
-    ['稅金 7%', weeks.reduce((s,w)=>s+(w.expense||0),0) * 0.12],
-    ['營運費用', 221783],
-    ['拍攝', 200000],
-    ['免運負擔', 87440],
-    ['KOC/KOL/直播', 30000],
+    ['FB廣告+Google+投手', sum('expAd')],
+    ['人事(含勞健保)', sum('expStaff')],
+    ['稅金7%', sum('expTax')],
+    ['營運費用', sum('expOps')],
+    ['拍攝', sum('expPhoto')],
+    ['KOC/KOL/直播', sum('expKOC')],
+    ['免運負擔', sum('expShipping')],
   ];
-  const max = Math.max(...items.map(x=>x[1]));
-  return items.map(([label, val]) => `
-    <div class="pnl-row">
-      <span class="pnl-label">${label}</span>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div style="width:80px; height:5px; background:var(--surface2); border-radius:3px; overflow:hidden;">
-          <div style="height:100%; width:${Math.min(100,(val/max)*100).toFixed(0)}%; background:var(--blue); border-radius:3px;"></div>
-        </div>
-        <span class="pnl-val" style="font-size:12px; width:65px; text-align:right;">$${fmt(val)}</span>
-      </div>
+  const max = Math.max(...items.map(x => x[1]));
+  return items.map(([label,val]) => `
+    <div class="ebar">
+      <span class="elabel">${label}</span>
+      <div class="ebar-track"><div class="ebar-fill" style="width:${Math.min(100,val/max*100).toFixed(0)}%"></div></div>
+      <span class="eval">$${fmt(val)}</span>
     </div>`).join('');
 }
 
-function initMonthlyCharts(weeks) {
-  const labels = weeks.map((w,i) => `W${i+1}`);
-  const isDark  = matchMedia('(prefers-color-scheme: dark)').matches;
-  const gridC   = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
-  const tickC   = isDark ? '#9e9d97' : '#9e9e99';
+function initCharts(weeks) {
+  const labels = weeks.map((_,i) => `W${i+1}`);
+  const tc = '#a0a09a', gc = 'rgba(0,0,0,0.07)';
+  const base = {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{x:{ticks:{color:tc,font:{size:11}},grid:{display:false}},
+            y:{ticks:{color:tc,font:{size:11},callback:v=>'$'+(v/10000).toFixed(0)+'萬'},grid:{color:gc}}}};
 
-  const baseOpts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: {
-      x: { ticks: { color: tickC, font: { size: 11 } }, grid: { display: false } },
-      y: { ticks: { color: tickC, font: { size: 11 }, callback: v => '$'+(v/10000).toFixed(0)+'萬' }, grid: { color: gridC } }
-    }
-  };
+  charts.push(new Chart(document.getElementById('c-rev'), {type:'line',
+    data:{labels, datasets:[{data:weeks.map(w=>Math.round(w.totalRevenue||0)), borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,0.08)', tension:.4, fill:true, pointRadius:5, pointBackgroundColor:'#2563eb'}]},
+    options:base}));
 
-  const c1 = new Chart(document.getElementById('chart-rev'), {
-    type: 'line',
-    data: { labels, datasets: [{ data: weeks.map(w => Math.round((w.shoplineRevenue||0)+(w.shopeeRevenue||0) || w.totalRevenue||0)), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.08)', tension: 0.4, fill: true, pointRadius: 5, pointBackgroundColor: '#2563eb' }] },
-    options: { ...baseOpts }
-  });
-  chartInstances.push(c1);
+  charts.push(new Chart(document.getElementById('c-roas'), {type:'bar',
+    data:{labels, datasets:[
+      {data:weeks.map(w=>Math.round(w.totalAd||0)), backgroundColor:'rgba(37,99,235,0.2)', borderColor:'#2563eb', borderWidth:1, yAxisID:'y'},
+      {data:weeks.map(w=>w.totalROAS||0), type:'line', borderColor:'#16a34a', backgroundColor:'transparent', tension:.4, pointRadius:5, pointBackgroundColor:'#16a34a', yAxisID:'y2', borderDash:[4,3]}
+    ]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:tc,font:{size:11}},grid:{display:false}},
+        y:{ticks:{color:tc,font:{size:11},callback:v=>'$'+(v/10000).toFixed(0)+'萬'},grid:{color:gc}},
+        y2:{position:'right',ticks:{color:tc,font:{size:11},callback:v=>v+'x'},grid:{display:false}}}}}));
 
-  const c2 = new Chart(document.getElementById('chart-roas'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { data: weeks.map(w => Math.round(w.totalAd||0)), backgroundColor: 'rgba(37,99,235,0.25)', borderColor: '#2563eb', borderWidth: 1, yAxisID: 'y' },
-        { data: weeks.map(w => w.totalROAS||0), type: 'line', borderColor: '#16a34a', backgroundColor: 'transparent', tension: 0.4, pointRadius: 5, pointBackgroundColor: '#16a34a', yAxisID: 'y2', borderDash: [4,3] }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: tickC, font: { size: 11 } }, grid: { display: false } },
-        y: { ticks: { color: tickC, font: { size: 11 }, callback: v => '$'+(v/10000).toFixed(0)+'萬' }, grid: { color: gridC } },
-        y2: { position: 'right', ticks: { color: tickC, font: { size: 11 }, callback: v => v+'x' }, grid: { display: false } }
-      }
-    }
-  });
-  chartInstances.push(c2);
-
-  const surpData = weeks.map(w => Math.round(w.surplus||0));
-  const c3 = new Chart(document.getElementById('chart-surplus'), {
-    type: 'bar',
-    data: { labels, datasets: [{ data: surpData, backgroundColor: surpData.map(v => v>=0?'rgba(22,163,74,0.45)':'rgba(220,38,38,0.45)'), borderColor: surpData.map(v => v>=0?'#16a34a':'#dc2626'), borderWidth: 1 }] },
-    options: { ...baseOpts }
-  });
-  chartInstances.push(c3);
+  const sd = weeks.map(w => Math.round(w.surplus||0));
+  charts.push(new Chart(document.getElementById('c-surp'), {type:'bar',
+    data:{labels, datasets:[{data:sd, backgroundColor:sd.map(v=>v>=0?'rgba(22,163,74,0.4)':'rgba(220,38,38,0.4)'), borderColor:sd.map(v=>v>=0?'#16a34a':'#dc2626'), borderWidth:1}]},
+    options:base}));
 }
 
-// ════════════════════════════════════════════════
+// ══════════════════════════════════════════
 //  HELPERS
-// ════════════════════════════════════════════════
+// ══════════════════════════════════════════
 function fmt(n) {
   n = n || 0;
-  return Math.abs(n) >= 10000
-    ? (n < 0 ? '-' : '') + (Math.abs(n)/10000).toFixed(1) + '萬'
-    : Math.round(n).toLocaleString();
+  return Math.abs(n) >= 10000 ? (n<0?'-':'')+(Math.abs(n)/10000).toFixed(1)+'萬' : Math.round(n).toLocaleString();
 }
-function pct(n) { return isFinite(n) ? (n*100).toFixed(1)+'%' : '—'; }
+function pct(n) { return isFinite(n) && n ? (n*100).toFixed(1)+'%' : '—'; }
 
-function kpi(label, value, sub, cls = '', small = false) {
-  return `<div class="metric-card">
-    <div class="metric-label">${label}</div>
-    <div class="metric-value${cls?' '+cls:''}" style="${small?'font-size:18px;':''}">${value}</div>
-    ${sub ? `<div class="metric-sub">${sub}</div>` : ''}
+function kpi(label, value, sub, cls='', sm=false) {
+  return `<div class="mc">
+    <div class="ml">${label}</div>
+    <div class="mv${cls?' '+cls:''}"${sm?' style="font-size:18px"':''}>${value}</div>
+    ${sub ? `<div class="ms">${sub}</div>` : ''}
   </div>`;
 }
 
-function adRow(name, spend, total, color, roas) {
-  const w = total > 0 ? Math.min(100, (spend/total)*100).toFixed(0) : 0;
-  return `<div class="ad-row">
-    <span class="ad-name">${name}</span>
-    <div style="flex:1; height:5px; background:var(--surface2); border-radius:3px; overflow:hidden;">
-      <div style="height:100%; width:${w}%; background:${color}; border-radius:3px;"></div>
+function infoCell(label, value) {
+  return `<div class="info-cell">
+    <div class="info-label">${label}</div>
+    <div class="info-val">${value}</div>
+  </div>`;
+}
+
+function adRow(name, spend, total, color, roas, buys, rev) {
+  const w = total > 0 ? Math.min(100,(spend/total)*100).toFixed(0) : 0;
+  return `<div class="adrow">
+    <span class="adname">${name}</span>
+    <div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:${w}%;background:${color};border-radius:3px"></div>
     </div>
-    <span style="font-size:12px; color:var(--text2); width:65px; text-align:right;">$${fmt(spend)}</span>
-    <span class="roas-pill">${roas ? roas.toFixed(2) : '—'}x</span>
+    <div style="text-align:right;flex-shrink:0;min-width:65px">
+      <div style="font-size:12px;font-weight:600">$${fmt(spend)}</div>
+      <div class="ad-detail">${buys||0}筆 / $${fmt(rev)}</div>
+    </div>
+    <span class="rpill">${roas ? roas.toFixed(2) : '—'}x</span>
   </div>`;
 }
 
-function pnlRow(label, value) {
-  return `<div class="pnl-row"><span class="pnl-label">${label}</span><span class="pnl-val">${value}</span></div>`;
+function pr(label, value) {
+  return `<div class="prow"><span class="plabel">${label}</span><span class="pval">${value}</span></div>`;
 }
 
 function sellBadge(r) {
@@ -625,34 +652,32 @@ function sellColor(r) {
   return '#dc2626';
 }
 
-function productRow(p) {
+function prodRow(p) {
   const r = p.sellRate || 0;
-  const barW = Math.min(100, r * 100).toFixed(0);
   return `<tr>
     <td>
-      <div style="font-size:13px; font-weight:500; line-height:1.4;">${p.name}</div>
+      <div style="font-size:12px;font-weight:600;line-height:1.4">${p.name}</div>
       ${sellBadge(r)}
     </td>
-    <td>$${(p.cost||0).toLocaleString()}</td>
-    <td>$${(p.price||0).toLocaleString()}</td>
+    <td>$${Math.round(p.cost||0).toLocaleString()}</td>
+    <td>$${Math.round(p.price||0).toLocaleString()}</td>
     <td>${p.batch||0}</td>
     <td>${p.shoplineIn||0}</td>
-    <td style="font-weight:600;">${p.sold||0}</td>
-    <td style="${(p.remain||0)<0?'color:var(--red);font-weight:600;':''}">${p.remain||0}</td>
+    <td style="font-weight:700">${p.sold||0}</td>
+    <td style="${(p.remain||0)<0?'color:var(--red);font-weight:700':''}">
+      ${p.remain||0}${(p.remain||0)<0?' ⚡':''}
+    </td>
     <td>
-      <div style="display:flex; align-items:center; justify-content:flex-end; gap:4px;">
-        <span style="color:${sellColor(r)}; font-weight:600;">${pct(r)}</span>
-        <div class="bar-wrap"><div class="bar-fill" style="width:${barW}%; background:${sellColor(r)};"></div></div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
+        <span style="color:${sellColor(r)};font-weight:700">${pct(r)}</span>
+        <div class="bw"><div class="bf" style="width:${Math.min(100,r*100).toFixed(0)}%;background:${sellColor(r)}"></div></div>
       </div>
     </td>
     <td>$${fmt(p.revenue)}</td>
-    <td style="color:var(--green); font-weight:500;">$${fmt(p.margin)}</td>
+    <td style="color:var(--green);font-weight:600">$${fmt(p.margin)}</td>
   </tr>`;
 }
 
-// ════════════════════════════════════════════════
-//  BOOT
-// ════════════════════════════════════════════════
 init();
 </script>
 </body>
