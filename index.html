@@ -163,35 +163,37 @@ function parseSheet(ws) {
   const totalAdRow = find('總廣告費', adHeaderRow);
   const totalAd = totalAdRow >= 0 ? n(R[totalAdRow][1]) : 0;
 
-  // 成交總額 (舊:成交總額(Shopline), 新:B_成交總額)
-  const shoplineGrossRow = find('成交總額', adHeaderRow);
-  const shoplineGross = shoplineGrossRow >= 0 ? n(R[shoplineGrossRow][1]) : 0;
+  // (shoplineGross and shoplineRevAd handled below with adRevSum)
 
-  // 總營業額 (舊:總營業額(Shopline), 新:C_總營業額)
-  const shoplineRevAdRow = find('總營業額(Shopline)', adHeaderRow) >= 0 ? find('總營業額(Shopline)', adHeaderRow) : find('C_總營業額', adHeaderRow);
-  const shoplineRevAd = shoplineRevAdRow >= 0 ? n(R[shoplineRevAdRow][1]) : 0;
-
-  // A_廣告費*ROAS_營業額總和 (新格式才有)
+  // A_廣告費*ROAS_營業額總和 (新格式有; 舊格式用三投手加總)
   const adRevSumRow = find('A_廣告費', adHeaderRow);
-  const adRevSum = adRevSumRow >= 0 ? n(R[adRevSumRow][1]) : (revFB1+revFB2+revGoogle);
+  const adRevSum = adRevSumRow >= 0 ? n(R[adRevSumRow][1]) : (revFB1 + revFB2 + revGoogle);
 
-  // 流失 — 舊格式: 流失營業額%, 新格式: 流失成交總額(B-C) + 流失成交總額%
+  // 成交總額: 新格式 B_成交總額, 舊格式 成交總額(Shopline)
+  const shoplineGrossRow2 = find('B_成交總額', adHeaderRow) >= 0 ? find('B_成交總額', adHeaderRow) : find('成交總額(Shopline)', adHeaderRow);
+  const shoplineGross = shoplineGrossRow2 >= 0 ? n(R[shoplineGrossRow2][1]) : 0;
+
+  // 總營業額: 新格式 C_總營業額, 舊格式 總營業額(Shopline)
+  const shoplineRevAdRow2 = find('C_總營業額', adHeaderRow) >= 0 ? find('C_總營業額', adHeaderRow) : find('總營業額(Shopline)', adHeaderRow);
+  const shoplineRevAd = shoplineRevAdRow2 >= 0 ? n(R[shoplineRevAdRow2][1]) : 0;
+
+  // 流失: 新格式有兩行(金額+%), 舊格式只有一行(金額)一行(%)
   const lostAmtRow = find('流失成交總額(B-C)', adHeaderRow) >= 0 ? find('流失成交總額(B-C)', adHeaderRow) : find('流失營業額%', adHeaderRow);
   const lostAmt = lostAmtRow >= 0 ? n(R[lostAmtRow][1]) : 0;
-  const lostPctRow = find('流失成交總額%', adHeaderRow) >= 0 ? find('流失成交總額%', adHeaderRow) : (lostAmtRow >= 0 ? lostAmtRow+1 : -1);
+  const lostPctRow = find('流失成交總額%', adHeaderRow) >= 0 ? find('流失成交總額%', adHeaderRow) : (lostAmtRow >= 0 ? lostAmtRow + 1 : -1);
   const lostPct = lostPctRow >= 0 ? n(R[lostPctRow][1]) : 0;
 
-  // 自然流量_成交額 (新格式才有)
-  const natGrossRow = find('自然流量產生_成交額', adHeaderRow) >= 0 ? find('自然流量產生_成交額', adHeaderRow) : find('自然流量產生成交額', adHeaderRow);
+  // 自然流量_成交額: 新格式才有
+  const natGrossRow = find('自然流量產生_成交額', adHeaderRow);
   const natGrossAmt = natGrossRow >= 0 ? n(R[natGrossRow][1]) : 0;
-  const natGrossPct = natGrossRow >= 0 ? n(R[natGrossRow+1]?.[1]) : 0;
+  const natGrossPct = natGrossRow >= 0 ? n(R[natGrossRow + 1]?.[1]) : 0;
 
-  // 自然流量_營業額 (舊:自然流量產生營業額, 新:自然流量產生_營業額(C-A))
+  // 自然流量_營業額: 新格式 自然流量產生_營業額, 舊格式 自然流量產生營業額
   const natRevRow = find('自然流量產生_營業額', adHeaderRow) >= 0 ? find('自然流量產生_營業額', adHeaderRow) : find('自然流量產生營業額', adHeaderRow);
   const natRevAmt = natRevRow >= 0 ? n(R[natRevRow][1]) : 0;
-  const natRevPct = natRevRow >= 0 ? n(R[natRevRow+1]?.[1]) : 0;
+  const natRevPct = natRevRow >= 0 ? n(R[natRevRow + 1]?.[1]) : 0;
 
-  // 總ROAS (舊:總ROAS, 新:總營業額ROAS)
+  // 總ROAS: 新格式 總營業額ROAS, 舊格式 總ROAS
   const totalROASrow = find('總營業額ROAS', adHeaderRow) >= 0 ? find('總營業額ROAS', adHeaderRow) : find('總ROAS', adHeaderRow);
   const totalROAS = totalROASrow >= 0 ? n(R[totalROASrow][1]) : 0;
   const totalGrossROASrow = find('總成交額ROAS', adHeaderRow);
