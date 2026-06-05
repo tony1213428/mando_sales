@@ -154,33 +154,45 @@ function parseSheet(ws) {
   const roasFB2 = roasRow >= 0 ? n(R[roasRow][2]) : 0;
   const roasGoogle = roasRow >= 0 ? n(R[roasRow][3]) : 0;
 
-  const revRow = find('廣告費*ROAS', adHeaderRow) >= 0 ? find('廣告費*ROAS', adHeaderRow) : find('產生營業額', adHeaderRow);
-  const revFB1 = revRow >= 0 ? n(R[revRow][1]) : 0;
-  const revFB2 = revRow >= 0 ? n(R[revRow][2]) : 0;
-  const revGoogle = revRow >= 0 ? n(R[revRow][3]) : 0;
+  // 產生營業額 (舊格式:產生營業額, 新格式:廣告費*ROAS_營業額)
+  const revRowIdx = find('產生營業額', adHeaderRow) >= 0 ? find('產生營業額', adHeaderRow) : find('廣告費*ROAS', adHeaderRow);
+  const revFB1 = revRowIdx >= 0 ? n(R[revRowIdx][1]) : 0;
+  const revFB2 = revRowIdx >= 0 ? n(R[revRowIdx][2]) : 0;
+  const revGoogle = revRowIdx >= 0 ? n(R[revRowIdx][3]) : 0;
 
   const totalAdRow = find('總廣告費', adHeaderRow);
   const totalAd = totalAdRow >= 0 ? n(R[totalAdRow][1]) : 0;
 
-  const shoplineGrossRow = find('B_成交總額', adHeaderRow) >= 0 ? find('B_成交總額', adHeaderRow) : find('成交總額(Shopline)', adHeaderRow);
+  // 成交總額 (舊:成交總額(Shopline), 新:B_成交總額)
+  const shoplineGrossRow = find('成交總額', adHeaderRow);
   const shoplineGross = shoplineGrossRow >= 0 ? n(R[shoplineGrossRow][1]) : 0;
 
-  const shoplineRevRow = find('C_總營業額', adHeaderRow) >= 0 ? find('C_總營業額', adHeaderRow) : find('總營業額(Shopline)', adHeaderRow);
-  const shoplineRevAd = shoplineRevRow >= 0 ? n(R[shoplineRevRow][1]) : 0;
+  // 總營業額 (舊:總營業額(Shopline), 新:C_總營業額)
+  const shoplineRevAdRow = find('總營業額(Shopline)', adHeaderRow) >= 0 ? find('總營業額(Shopline)', adHeaderRow) : find('C_總營業額', adHeaderRow);
+  const shoplineRevAd = shoplineRevAdRow >= 0 ? n(R[shoplineRevAdRow][1]) : 0;
 
-  const lostPctRow = find('流失成交總額%', adHeaderRow);
-  const lostAmt = lostPctRow > 0 ? n(R[lostPctRow-1]?.[1]) : 0;
+  // A_廣告費*ROAS_營業額總和 (新格式才有)
+  const adRevSumRow = find('A_廣告費', adHeaderRow);
+  const adRevSum = adRevSumRow >= 0 ? n(R[adRevSumRow][1]) : (revFB1+revFB2+revGoogle);
+
+  // 流失 — 舊格式: 流失營業額%, 新格式: 流失成交總額(B-C) + 流失成交總額%
+  const lostAmtRow = find('流失成交總額(B-C)', adHeaderRow) >= 0 ? find('流失成交總額(B-C)', adHeaderRow) : find('流失營業額%', adHeaderRow);
+  const lostAmt = lostAmtRow >= 0 ? n(R[lostAmtRow][1]) : 0;
+  const lostPctRow = find('流失成交總額%', adHeaderRow) >= 0 ? find('流失成交總額%', adHeaderRow) : (lostAmtRow >= 0 ? lostAmtRow+1 : -1);
   const lostPct = lostPctRow >= 0 ? n(R[lostPctRow][1]) : 0;
 
-  const natRevRow = find('自然流量產生_營業額(C-A)', adHeaderRow);
-  const natRevAmt = natRevRow >= 0 ? n(R[natRevRow][1]) : 0;
-  const natRevPct = natRevRow >= 0 ? n(R[natRevRow+1]?.[1]) : 0;
-
-  const natGrossRow = find('自然流量產生_成交額(B-A)', adHeaderRow);
+  // 自然流量_成交額 (新格式才有)
+  const natGrossRow = find('自然流量產生_成交額', adHeaderRow) >= 0 ? find('自然流量產生_成交額', adHeaderRow) : find('自然流量產生成交額', adHeaderRow);
   const natGrossAmt = natGrossRow >= 0 ? n(R[natGrossRow][1]) : 0;
   const natGrossPct = natGrossRow >= 0 ? n(R[natGrossRow+1]?.[1]) : 0;
 
-  const totalROASrow = find('總營業額ROAS', adHeaderRow);
+  // 自然流量_營業額 (舊:自然流量產生營業額, 新:自然流量產生_營業額(C-A))
+  const natRevRow = find('自然流量產生_營業額', adHeaderRow) >= 0 ? find('自然流量產生_營業額', adHeaderRow) : find('自然流量產生營業額', adHeaderRow);
+  const natRevAmt = natRevRow >= 0 ? n(R[natRevRow][1]) : 0;
+  const natRevPct = natRevRow >= 0 ? n(R[natRevRow+1]?.[1]) : 0;
+
+  // 總ROAS (舊:總ROAS, 新:總營業額ROAS)
+  const totalROASrow = find('總營業額ROAS', adHeaderRow) >= 0 ? find('總營業額ROAS', adHeaderRow) : find('總ROAS', adHeaderRow);
   const totalROAS = totalROASrow >= 0 ? n(R[totalROASrow][1]) : 0;
   const totalGrossROASrow = find('總成交額ROAS', adHeaderRow);
   const totalGrossROAS = totalGrossROASrow >= 0 ? n(R[totalGrossROASrow][1]) : 0;
@@ -381,26 +393,62 @@ function buildWeekBody(w) {
   <div class="g2 gap">
     <div class="card">
       <div class="sl">廣告投放效益</div>
-      ${adRow('FB Wayne', w.adFB1, w.totalAd, '#2563eb', w.roasFB1, w.buyFB1, w.revFB1)}
-      ${adRow('FB 曼',    w.adFB2, w.totalAd, '#7c3aed', w.roasFB2, w.buyFB2, w.revFB2)}
-      ${adRow('Google',  w.adGoogle, w.totalAd, '#16a34a', w.roasGoogle, w.buyGoogle, w.revGoogle)}
-      <div class="dv"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div><div class="ml">總廣告費</div><div style="font-size:18px;font-weight:700">$${fmt(w.totalAd)}</div></div>
+      <div class="twrap" style="margin-bottom:12px">
+        <table>
+          <thead><tr>
+            <th style="text-align:left;min-width:100px"></th>
+            <th style="text-align:center">FB Wayne</th>
+            <th style="text-align:center">FB 曼</th>
+            <th style="text-align:center">Google</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td style="color:var(--text2);font-size:12px">廣告費</td>
+              <td style="text-align:center;font-weight:600">$${fmt(w.adFB1)}</td>
+              <td style="text-align:center;font-weight:600">$${fmt(w.adFB2)}</td>
+              <td style="text-align:center;font-weight:600">$${fmt(w.adGoogle)}</td>
+            </tr>
+            <tr>
+              <td style="color:var(--text2);font-size:12px">購買數</td>
+              <td style="text-align:center">${w.buyFB1}</td>
+              <td style="text-align:center">${w.buyFB2}</td>
+              <td style="text-align:center">${w.buyGoogle}</td>
+            </tr>
+            <tr>
+              <td style="color:var(--text2);font-size:12px">ROAS</td>
+              <td style="text-align:center;color:var(--blue);font-weight:700">${w.roasFB1.toFixed(2)}x</td>
+              <td style="text-align:center;color:var(--blue);font-weight:700">${w.roasFB2.toFixed(2)}x</td>
+              <td style="text-align:center;color:var(--blue);font-weight:700">${w.roasGoogle.toFixed(2)}x</td>
+            </tr>
+            <tr>
+              <td style="color:var(--text2);font-size:12px">產生營業額</td>
+              <td style="text-align:center">$${fmt(w.revFB1)}</td>
+              <td style="text-align:center">$${fmt(w.revFB2)}</td>
+              <td style="text-align:center">$${fmt(w.revGoogle)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:8px">
+        ${pr('廣告費*ROAS 營業額總和', '$'+fmt(w.adRevSum))}
+        ${pr('成交總額 (Shopline)', '$'+fmt(w.shoplineGross))}
+        ${pr('總營業額 (Shopline)', '$'+fmt(w.shoplineRevAd))}
+        ${pr('總廣告費', '<strong>$'+fmt(w.totalAd)+'</strong>')}
+      </div>
+      <div style="background:var(--surface2);border-radius:var(--rs);padding:10px 12px;margin-bottom:8px">
+        ${pr('流失成交總額 (B-C)', '$'+fmt(w.lostAmt)+' <span style="color:var(--red);font-weight:700"> '+pct(w.lostPct)+'</span>')}
+        ${w.natGrossAmt ? pr('自然流量產生_成交額 (B-A)', '$'+fmt(w.natGrossAmt)+' <span style="color:var(--text3)"> '+pct(w.natGrossPct)+'</span>') : ''}
+        ${pr('自然流量產生_營業額 (C-A)', '$'+fmt(w.natRevAmt)+' <span style="color:'+(w.natRevPct<0?'var(--red)':'var(--text3)')+';font-weight:'+(w.natRevPct<0?700:400)+'"> '+pct(w.natRevPct)+'</span>')}
+      </div>
+      <div style="display:flex;justify-content:space-around;padding:8px 0 2px">
         <div style="text-align:center">
           <div class="ml">總營業額ROAS</div>
-          <div style="font-size:22px;font-weight:800;color:var(--blue)">${w.totalROAS.toFixed(2)}x</div>
+          <div style="font-size:26px;font-weight:800;color:var(--blue)">${w.totalROAS.toFixed(2)}x</div>
         </div>
-        <div style="text-align:right">
+        ${w.totalGrossROAS ? `<div style="text-align:center">
           <div class="ml">總成交額ROAS</div>
-          <div style="font-size:18px;font-weight:700;color:var(--blue)">${w.totalGrossROAS.toFixed(2)}x</div>
-        </div>
-      </div>
-      <div class="info-grid">
-        ${infoCell('成交總額(Shopline)', '$'+fmt(w.shoplineGross))}
-        ${infoCell('流失成交額', '$'+fmt(w.lostAmt)+' <span style="color:var(--red);font-size:11px">'+pct(w.lostPct)+'</span>')}
-        ${infoCell('自然流量_成交額', '$'+fmt(w.natGrossAmt)+' <span style="font-size:11px;color:var(--text3)">'+pct(w.natGrossPct)+'</span>')}
-        ${infoCell('自然流量_營業額', '$'+fmt(w.natRevAmt)+' <span style="font-size:11px;color:'+(w.natRevPct<0?'var(--red)':'var(--text3)')+'">'+pct(w.natRevPct)+'</span>')}
+          <div style="font-size:22px;font-weight:700;color:var(--blue)">${w.totalGrossROAS.toFixed(2)}x</div>
+        </div>` : ''}
       </div>
     </div>
 
